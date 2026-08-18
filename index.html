@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kiosk POS · Siluetas Art Studio</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#161826">
+<link rel="manifest" href="./manifest.json">
+<style>
+  :root{
+    --color-bg:#161826;
+    --color-surface:#232532;
+    --color-text:#e9e9ed;
+    --color-accent:#ce5fa5;
+    --color-accent-300: color-mix(in srgb, var(--color-accent) 55%, white 45%);
+    --color-accent-600: color-mix(in srgb, var(--color-accent) 75%, black 25%);
+    --color-accent-700: color-mix(in srgb, var(--color-accent) 55%, black 45%);
+    --color-accent-800: color-mix(in srgb, var(--color-accent) 35%, black 65%);
+    --color-accent-900: color-mix(in srgb, var(--color-accent) 20%, black 80%);
+    --color-divider: color-mix(in srgb, var(--color-text) 16%, transparent);
+    --color-order-detail-bg:#e3f5c9;
+    --color-neutral-800:#2a2c3a;
+    --color-neutral-900:#1b1d29;
+    --shadow-sm: 0 2px 8px rgba(0,0,0,0.28);
+    --shadow-md: 0 12px 32px rgba(0,0,0,0.45);
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-script: "Snell Roundhand", "Brush Script MT", cursive;
+    --font-mono: ui-monospace, Menlo, "SFMono-Regular", Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0e0f18}
+  body{-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+  #app-frame{
+    position:relative;max-width:480px;margin:0 auto;min-height:100dvh;
+    background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .kx-scroll::-webkit-scrollbar{display:none}
+  .kx-scroll{scrollbar-width:none}
+  @keyframes popIn{0%{transform:scale(0.6);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+  @keyframes checkDraw{to{stroke-dashoffset:0}}
+
+  .input{
+    background:var(--color-surface);border:1px solid var(--color-divider);border-radius:10px;
+    color:var(--color-text);padding:0 14px;font-family:inherit;font-size:15px;outline:none;
+  }
+  .input::placeholder{color:color-mix(in srgb, var(--color-text) 40%, transparent)}
+  .input:focus{border-color:var(--color-accent)}
+
+  .btn{
+    display:flex;align-items:center;justify-content:center;border-radius:12px;cursor:pointer;
+    font-weight:600;user-select:none;border:1.5px solid transparent;font-family:inherit;transition:opacity .15s;
+  }
+  .btn:active{opacity:0.75}
+  .btn-primary{background:transparent;border-color:var(--color-accent);color:var(--color-accent)}
+  .btn-secondary{background:transparent;border-color:var(--color-divider);color:var(--color-text)}
+  .btn-block{width:100%}
+  .btn-disabled{opacity:0.4;pointer-events:none}
+
+  .card{background:var(--color-surface);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px}
+  .elev-sm{box-shadow:var(--shadow-sm)}
+
+  .seg{display:flex;gap:6px}
+  .seg-opt{border-radius:12px;display:flex;align-items:center;cursor:pointer;transition:.15s}
+
+  .tag{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.03em}
+  .tag-outline{border:1px solid #6CD5A2;color:#6CD5A2;background:transparent}
+
+  .field label{display:block;font-size:11px;color:color-mix(in srgb, var(--color-text) 55%, transparent);
+    letter-spacing:.05em;margin-bottom:6px;font-weight:600}
+</style>
+</head>
+<body>
+<div id="app-frame"><div id="app"></div></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ============================== CONFIG =============================== */
+/* Edit these to re-theme the app or point it at a different backend.    */
+var CONFIG = {
+  SHEET_URL: 'https://script.google.com/macros/s/AKfycbxlcWHn2192VEjRZOhF3m4nK9IxE12xtv7QbKem3Qb3zXwEl7PQt_ZQWjT3orQ1cATS/exec',
+  bgColor: '#161826',
+  surfaceColor: '#232532',
+  textColor: '#e9e9ed',
+  accentColor: '#ce5fa5',
+  orderDetailBg: '#e3f5c9',
+  tattooItemBg: '#3a2436',
+  braidItemBg: '#2e3638',
+  capItemBg: '#232948',
+  otherItemBg: '#3a3624',
+  braidMenuBarBg: '#232532',
+  adminPin: '9999',
+  idleTimeoutSeconds: 45
+};
+
+var CUR = function(n){ return '$' + (Number(n) || 0).toFixed(2); };
+
+/* Fallback data, used only if the live Google Sheet is unreachable. */
+var TATTOOS = [
+  {id:'t1',code:'TA-014',name:'Rose Vine',collection:'Floral',price:4},
+  {id:'t2',code:'TA-027',name:'Wildflower Cuff',collection:'Floral',price:4},
+  {id:'t3',code:'TA-041',name:'Sun & Arrow',collection:'Tribal',price:5},
+  {id:'t4',code:'TA-058',name:'Geo Wolf',collection:'Tribal',price:5},
+  {id:'t5',code:'TA-073',name:'Neon Bolt',collection:'Neon',price:5},
+  {id:'t6',code:'TA-081',name:'Glow Star Set',collection:'Neon',price:5},
+  {id:'t7',code:'TA-096',name:'Dino Trio',collection:'Kids',price:3},
+  {id:'t8',code:'TA-104',name:'Unicorn Sparkle',collection:'Kids',price:3},
+  {id:'t9',code:'TA-119',name:'Glitter Heart',collection:'Glitter',price:6},
+  {id:'t10',code:'TA-132',name:'Glitter Wave',collection:'Glitter',price:6},
+  {id:'t11',code:'TA-145',name:'Lotus Bloom',collection:'Floral',price:4},
+  {id:'t12',code:'TA-158',name:'Aztec Band',collection:'Tribal',price:5}
+];
+var BRAIDS = [
+  {id:'b1',name:'Classic Cornrow Braid',desc:'2 rows, beads included',price:12},
+  {id:'b2',name:'Beach Wave Braid',desc:'Loose single braid',price:15},
+  {id:'b3',name:'Rainbow Accent Braid',desc:'Colored thread wrap',price:18}
+];
+var KIOSKS = [
+  {id:'k1',name:'ALFA1'}, {id:'k2',name:'ALFA2'}, {id:'k3',name:'CHARLIE'}, {id:'k4',name:'DELTA'}
+];
+var PAY_METHODS = [
+  {id:'cash',label:'Cash'}, {id:'card',label:'Card / phone card'},
+  {id:'revolut',label:'Revolut'}, {id:'mbway',label:'MB WAY'}, {id:'other',label:'Other'}
+];
+
+/* ============================== STATE ================================= */
+var state = {
+  activeTab:'register', category:'tattoos', cart:[], sheetStep:null,
+  capText:'', capType:'custom', capPrice:18, capPriceLoading:false,
+  tattooInput:'', tattooError:'', tattooAdded:'', tattooPreview:null, tattooPreviewName:null,
+  tattooPreviewLoading:false, tattooLoading:false,
+  activeKioskId:'ALFA1',
+  sheetBraids:null, sheetKiosks:null, sheetOthers:null,
+  cachedTattoos:null, cachedStaff:null, cachedCapPrices:null, cachedCapNames:null, cacheUpdatedAt:null,
+  staffLoggedIn:false, staffCode:'', staffName:'', staffShop:'', loginError:'', loginBusy:false,
+  adminOpen:false, adminPinInput:'', adminError:'', adminUnlocked:false, showUpdatingIndicator:false,
+  braidMenuOpen:true, tattooMenuOpen:true, capMenuOpen:true, otherMenuOpen:true, orderReviewOpen:true,
+  expandedOrderId:null, paymentMethod:null,
+  orders:[], sheetOrdersToday:null, dailyTotals:null, dailyRefreshBusy:false,
+  refreshBusy:false, refreshMsg:'', lastOrder:null
+};
+
+var CACHE_KEY = 'kioskpos_cache_v1';
+var DAILY_CACHE_KEY = 'kioskpos_daily_v1';
+var ORDERS_CACHE_KEY = 'kioskpos_orders_v1';
+var _idleTimer = null, _previewTimer = null;
+
+/* ============================== DOM HELPER ============================= */
+function h(tag, props){
+  var el = document.createElement(tag);
+  var children = Array.prototype.slice.call(arguments, 2);
+  if (props) {
+    Object.keys(props).forEach(function(k){
+      var v = props[k];
+      if (v === undefined || v === null || v === false) return;
+      if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+      else if (k.indexOf('on') === 0 && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
+      else if (k === 'class') el.className = v;
+      else if (k === 'dataField') el.setAttribute('data-field', v);
+      else el.setAttribute(k, v === true ? '' : v);
+    });
+  }
+  (function flatten(arr){
+    arr.forEach(function(c){
+      if (Array.isArray(c)) return flatten(c);
+      if (c === null || c === undefined || c === false || c === '') return;
+      el.appendChild((typeof c === 'string' || typeof c === 'number') ? document.createTextNode(c) : c);
+    });
+  })(children);
+  return el;
+}
+function svg(pathD, w, h_, stroke, extra){
+  var ns = 'http://www.w3.org/2000/svg';
+  var s = document.createElementNS(ns, 'svg');
+  s.setAttribute('width', w); s.setAttribute('height', h_); s.setAttribute('viewBox', '0 0 ' + w + ' ' + h_);
+  if (extra) Object.keys(extra).forEach(function(k){ s.setAttribute(k, extra[k]); });
+  var p = document.createElementNS(ns, 'path');
+  p.setAttribute('d', pathD); p.setAttribute('stroke', stroke); p.setAttribute('stroke-width', '1.6');
+  p.setAttribute('fill', 'none'); p.setAttribute('stroke-linecap', 'round'); p.setAttribute('stroke-linejoin', 'round');
+  s.appendChild(p);
+  return s;
+}
+
+/* ============================== SETSTATE / RENDER ======================= */
+function setState(patch){
+  var next = (typeof patch === 'function') ? patch(state) : patch;
+  Object.assign(state, next);
+  scheduleRender();
+}
+var _renderQueued = false;
+function scheduleRender(){
+  if (_renderQueued) return;
+  _renderQueued = true;
+  requestAnimationFrame(function(){ _renderQueued = false; doRender(); });
+}
+function doRender(){
+  var active = document.activeElement;
+  var field = active && active.getAttribute ? active.getAttribute('data-field') : null;
+  var selStart = active && 'selectionStart' in active ? active.selectionStart : null;
+  var selEnd = active && 'selectionEnd' in active ? active.selectionEnd : null;
+
+  var root = document.getElementById('app');
+  root.innerHTML = '';
+  root.appendChild(renderApp());
+
+  if (field) {
+    var el = root.querySelector('[data-field="' + field + '"]');
+    if (el) {
+      el.focus();
+      if (selStart != null && el.setSelectionRange) { try { el.setSelectionRange(selStart, selEnd); } catch(e){} }
+    }
+  }
+}
+
+/* ============================== BUSINESS LOGIC ========================= */
+function addItem(item){
+  if (_idleTimer) clearTimeout(_idleTimer);
+  setState(function(s){
+    var cart = s.cart.slice();
+    var i = cart.findIndex(function(c){ return c.id === item.id; });
+    if (i >= 0) cart[i] = Object.assign({}, cart[i], {qty: cart[i].qty + 1});
+    else cart.push(Object.assign({}, item, {qty: 1}));
+    return {cart: cart};
+  });
+}
+function incQty(id){ setState(function(s){ return {cart: s.cart.map(function(c){ return c.id === id ? Object.assign({}, c, {qty: c.qty + 1}) : c; })}; }); }
+function decQty(id){ setState(function(s){ return {cart: s.cart.map(function(c){ return c.id === id ? Object.assign({}, c, {qty: c.qty - 1}) : c; }).filter(function(c){ return c.qty > 0; })}; }); }
+
+function tattooDigit(d){
+  setState(function(s){ return {tattooInput: s.tattooInput.length < 4 ? s.tattooInput + d : s.tattooInput, tattooError:'', tattooAdded:'', tattooPreview:null}; });
+  schedulePreviewLookup();
+}
+function tattooBackspace(){
+  setState(function(s){ return {tattooInput: s.tattooInput.slice(0, -1), tattooError:'', tattooAdded:'', tattooPreview:null}; });
+  schedulePreviewLookup();
+}
+function schedulePreviewLookup(){ clearTimeout(_previewTimer); _previewTimer = setTimeout(lookupPreview, 300); }
+function lookupPreview(){
+  var raw = state.tattooInput;
+  if (!raw) return;
+  var n = parseInt(raw, 10);
+  var cached = (state.cachedTattoos && state.cachedTattoos.length) ? state.cachedTattoos.find(function(t){ return Number(t.number) === n; }) : null;
+  if (cached) { setState({tattooPreview: Number(cached.price), tattooPreviewName: cached.name || null, tattooPreviewLoading:false}); return; }
+  setState({tattooPreviewLoading:true});
+  fetch(CONFIG.SHEET_URL + '?number=' + n).then(function(r){ return r.json(); }).then(function(data){
+    if (state.tattooInput !== raw) return;
+    if (data.found) setState({tattooPreview: Number(data.price), tattooPreviewName: data.name || null, tattooPreviewLoading:false});
+    else setState({tattooPreview:null, tattooPreviewName:null, tattooPreviewLoading:false});
+  }).catch(function(err){
+    console.error('Sheet lookup failed:', err);
+    if (state.tattooInput !== raw) return;
+    var match = TATTOOS.find(function(t){ return parseInt(t.code.replace('TA-',''), 10) === n; });
+    setState({tattooPreview: match ? match.price : null, tattooPreviewName: match ? match.name : null, tattooPreviewLoading:false});
+  });
+}
+function updateStaffCode(v){ setState({staffCode: v.toUpperCase(), loginError:''}); }
+function staffLogin(){
+  var code = state.staffCode.trim();
+  if (!code) return;
+  var cachedMatch = (state.cachedStaff && state.cachedStaff.length) ? state.cachedStaff.find(function(s2){ return String(s2.code).toUpperCase() === code.toUpperCase(); }) : null;
+  if (cachedMatch) {
+    if (String(cachedMatch.active).toUpperCase() === 'Y') {
+      setState({staffLoggedIn:true, staffName:cachedMatch.name, staffShop:cachedMatch.shop, loginBusy:false, staffCode:''});
+      resetIdleTimer();
+    } else setState({loginError:'Code not found or inactive'});
+    return;
+  }
+  setState({loginBusy:true, loginError:''});
+  fetch(CONFIG.SHEET_URL + '?staffCode=' + encodeURIComponent(code)).then(function(r){ return r.json(); }).then(function(data){
+    if (data.found && String(data.active).toUpperCase() === 'Y') {
+      setState({staffLoggedIn:true, staffName:data.name, staffShop:data.shop, loginBusy:false, staffCode:''});
+      resetIdleTimer();
+    } else setState({loginError:'Code not found or inactive', loginBusy:false});
+  }).catch(function(err){
+    console.error('Staff lookup failed:', err);
+    setState({loginError:'Error: ' + (err && err.message ? err.message : String(err)), loginBusy:false});
+  });
+}
+function logout(){ setState({staffLoggedIn:false, staffName:'', staffShop:'', adminUnlocked:false, staffCode:''}); }
+function resetIdleTimer(){
+  if (_idleTimer) clearTimeout(_idleTimer);
+  var seconds = Number(CONFIG.idleTimeoutSeconds || 45);
+  if (!state.staffLoggedIn || !seconds) return;
+  if (state.cart.length > 0 || state.sheetStep) return;
+  _idleTimer = setTimeout(logout, seconds * 1000);
+}
+function toggleAdminGate(){ setState(function(s){ return {adminOpen: !s.adminOpen, adminPinInput:'', adminError:''}; }); }
+function updateAdminPin(v){ setState({adminPinInput: v, adminError:''}); }
+function checkAdminPin(){
+  var pin = CONFIG.adminPin || '9999';
+  if (state.adminPinInput === pin) setState({adminUnlocked:true, adminOpen:false, adminPinInput:''});
+  else setState({adminError:'Wrong PIN'});
+}
+function tattooEnter(){
+  if (state.tattooLoading) return;
+  var raw = state.tattooInput;
+  if (!raw) return;
+  var n = parseInt(raw, 10);
+  var cached = (state.cachedTattoos && state.cachedTattoos.length) ? state.cachedTattoos.find(function(t){ return Number(t.number) === n; }) : null;
+  if (cached) {
+    var name = cached.name || ('Tattoo #' + n);
+    addItem({id:'tt-' + n, name: name + ' (#' + n + ')', price: Number(cached.price), category:'tattoos'});
+    setState({tattooInput:'', tattooPreview:null, tattooPreviewName:null, tattooError:'', tattooAdded: name + ' added — ' + CUR(Number(cached.price))});
+    return;
+  }
+  setState({tattooError:'', tattooAdded:'', tattooLoading:true});
+  fetch(CONFIG.SHEET_URL + '?number=' + n).then(function(r){ return r.json(); }).then(function(data){
+    if (data.found) {
+      var nm = data.name || ('Tattoo #' + n);
+      addItem({id:'tt-' + n, name: nm + ' (#' + n + ')', price: Number(data.price), category:'tattoos'});
+      setState({tattooInput:'', tattooPreview:null, tattooPreviewName:null, tattooError:'', tattooAdded: nm + ' added — ' + CUR(Number(data.price)), tattooLoading:false});
+    } else {
+      setState({tattooInput:'', tattooPreview:null, tattooPreviewName:null, tattooError:'No tattoo #' + n + ' found in sheet', tattooLoading:false});
+    }
+  }).catch(function(err){
+    console.error('Tattoo enter failed, using fallback:', err);
+    var match = TATTOOS.find(function(t){ return parseInt(t.code.replace('TA-',''), 10) === n; });
+    var price = match ? match.price : 5;
+    var name2 = match ? match.name : 'Tattoo #' + n;
+    addItem({id:'tt-' + n, name: name2 + (match ? ' (#' + n + ')' : ''), price: price, category:'tattoos'});
+    setState({tattooInput:'', tattooPreview:null, tattooPreviewName:null, tattooError:'', tattooAdded: name2 + ' added — ' + CUR(price) + ' (sheet unreachable, used fallback)', tattooLoading:false});
+  });
+}
+function fetchWithTimeout(url, ms){
+  var controller = new AbortController();
+  var timer = setTimeout(function(){ controller.abort(); }, ms);
+  return fetch(url, {signal: controller.signal}).finally(function(){ clearTimeout(timer); });
+}
+function refreshDailyTotals(manual){
+  if (manual) setState({dailyRefreshBusy:true});
+  Promise.all([
+    fetchWithTimeout(CONFIG.SHEET_URL + '?lookup=dailyTotals', 8000),
+    fetchWithTimeout(CONFIG.SHEET_URL + '?lookup=todayOrders', 8000)
+  ]).then(function(res){
+    return Promise.all([res[0].json(), res[1].json()]);
+  }).then(function(data2){
+    var data = data2[0], ordersData = data2[1];
+    var daily = Object.assign({}, data, {dateStr: new Date().toDateString(), updatedAt: Date.now()});
+    try { localStorage.setItem(DAILY_CACHE_KEY, JSON.stringify(daily)); } catch(e){}
+    var sheetOrders = (ordersData.orders || []).map(function(o){
+      return {id:'#' + o.rowId, kioskId:o.kiosk, time:o.time, method:o.method, lines:[{name:o.items, qty:1, price:Number(o.total)}]};
+    });
+    try { localStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify({orders: sheetOrders, dateStr: daily.dateStr})); } catch(e){}
+    setState({dailyRefreshBusy:false, sheetOrdersToday: sheetOrders});
+    setTimeout(function(){ setState({dailyTotals: daily}); }, 260);
+  }).catch(function(err){
+    console.error('Daily totals fetch failed:', err);
+    setState({dailyRefreshBusy:false});
+  });
+}
+function refreshSheetData(manual){
+  if (manual) setState({refreshBusy:true, refreshMsg:''});
+  fetch(CONFIG.SHEET_URL + '?lookup=all').then(function(r){ return r.json(); }).then(function(data){
+    var cache = {
+      tattoos: data.tattoos || [], braids: data.braids || [], staff: data.staff || [],
+      kiosks: data.kiosks || [], capPrices: data.capPrices || {custom:18, regular:15},
+      capNames: data.capNames || {custom:'Custom cap', regular:'Regular cap'},
+      others: data.others || [], updatedAt: Date.now()
+    };
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch(e){}
+    setState({
+      sheetBraids: cache.braids, sheetKiosks: cache.kiosks, cachedTattoos: cache.tattoos,
+      cachedStaff: cache.staff, cachedCapPrices: cache.capPrices, cachedCapNames: cache.capNames,
+      sheetOthers: cache.others, cacheUpdatedAt: cache.updatedAt,
+      refreshBusy:false, refreshMsg: manual ? 'Data refreshed' : ''
+    });
+  }).catch(function(err){
+    console.error('Full sheet refresh failed:', err);
+    if (manual) setState({refreshBusy:false, refreshMsg:'Refresh failed — check connection'});
+  });
+}
+function selectCapType(type){
+  var sheetName = type === 'custom' ? 'custom cap' : 'regular cap';
+  var fallback = type === 'custom' ? 18 : 15;
+  var cached = (state.cachedCapPrices && Object.keys(state.cachedCapPrices).length) ? state.cachedCapPrices : null;
+  if (cached && cached[type] != null) { setState({capType:type, capPrice:Number(cached[type]), capPriceLoading:false}); return; }
+  setState({capType:type, capPriceLoading:true});
+  fetch(CONFIG.SHEET_URL + '?lookup=cap&name=' + encodeURIComponent(sheetName)).then(function(r){ return r.json(); }).then(function(data){
+    setState({capPrice: data.found ? Number(data.price) : fallback, capPriceLoading:false});
+  }).catch(function(err){
+    console.error('Cap price lookup failed:', err);
+    setState({capPrice: fallback, capPriceLoading:false});
+  });
+}
+function addCapToCart(){
+  var price = state.capPrice;
+  var cachedNames = state.cachedCapNames || {};
+  var label = cachedNames[state.capType] || (state.capType === 'custom' ? 'Custom cap' : 'Regular cap');
+  var text = state.capText.trim();
+  var id = 'cap-' + state.capType + (text ? '-' + text.toUpperCase() : '');
+  addItem({id:id, name: label + (text ? ' "' + text.toUpperCase() + '"' : ''), price:price, category:'caps'});
+  setState({capText:''});
+}
+function cartTotal(){ return state.cart.reduce(function(s,c){ return s + c.price * c.qty; }, 0); }
+function confirmPayment(){
+  if (!state.paymentMethod) return;
+  var method = PAY_METHODS.find(function(p){ return p.id === state.paymentMethod; }) || PAY_METHODS[0];
+  var total = cartTotal();
+  var lines = state.cart.map(function(c){ return {name:c.name, qty:c.qty, price:c.price}; });
+  var order = {id:'#' + (1043 + state.orders.length), kioskId: state.activeKioskId, time:'Just now', method: method.label, lines: lines};
+  var kiosk = state.activeKioskId;
+  var categories = Array.from(new Set(state.cart.map(function(c){ return c.category; }))).join('/');
+  var itemsStr = lines.map(function(l){ return l.qty + '× ' + l.name; }).join(', ');
+  logSaleToSheet({kiosk:kiosk, staff: state.staffName, items: itemsStr, category: categories, method: method.label, total: total});
+  setState(function(s){ return {orders: [order].concat(s.orders), lastOrder: Object.assign({}, order, {total: total}), cart: [], sheetStep:'success', paymentMethod:null}; });
+}
+function logSaleToSheet(sale){
+  var params = new URLSearchParams({action:'logSale', kiosk:sale.kiosk, staff:sale.staff, items:sale.items, category:sale.category, method:sale.method, total:sale.total});
+  fetch(CONFIG.SHEET_URL + '?' + params.toString()).catch(function(err){ console.error('Sale log failed:', err); });
+}
+
+/* ============================== RENDER: PIECES ========================= */
+function renderLoginOverlay(){
+  if (state.staffLoggedIn) return null;
+  return h('div', {style:{position:'absolute', inset:'0', zIndex:'200', background:'var(--color-bg)', display:'flex', flexDirection:'column', justifyContent:'center', padding:'32px', gap:'16px'}},
+    h('div', {style:{textAlign:'center', marginBottom:'8px'}},
+      h('div', {style:{fontSize:'34px', lineHeight:'1', color:'#414350', fontFamily:'var(--font-script)', fontWeight:'400'}}, 'Siluetas Art Studio')
+    ),
+    h('input', {type:'text', value: state.staffCode, dataField:'staffCode',
+      class:'input', placeholder:'Your code',
+      style:{width:'100%', maxWidth:'334px', alignSelf:'center', textAlign:'center', fontSize:'16px', letterSpacing:'0.08em', height:'80px'},
+      oninput: function(e){ updateStaffCode(e.target.value); },
+      onkeydown: function(e){ if (e.key === 'Enter') staffLogin(); }
+    }),
+    state.loginError ? h('div', {style:{fontSize:'13px', color:'#D56CA9', textAlign:'center'}}, state.loginError) : null,
+    h('div', {class:'btn btn-primary btn-block', style:{maxWidth:'337px', alignSelf:'center', height:'80px'}, onclick: staffLogin},
+      state.loginBusy ? 'Signing in…' : 'Sign in')
+  );
+}
+
+function renderHeader(){
+  var subtitles = {
+    register: '162 tattoo designs · ' + BRAIDS.length + ' braid styles · custom caps',
+    orders: 'Order history', reports: "Today's performance", kiosks: KIOSKS.length + ' locations'
+  };
+  var kioskName = state.staffShop || state.activeKioskId;
+  return h('div', {style:{padding:'calc(env(safe-area-inset-top, 0px) + 22px) 20px 10px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:'0'}},
+    h('div', {style:{cursor:'pointer'}, onclick: function(){ setState({activeTab:'kiosks'}); }},
+      h('div', {style:{fontSize:'19px', fontWeight:'600', color:'var(--color-text)', letterSpacing:'-0.01em', display:'flex', alignItems:'center', gap:'6px'}},
+        kioskName, svg('M1 1l4 4 4-4', 10, 7, 'var(--color-text)', {style:'opacity:0.55'})
+      ),
+      h('div', {style:{fontSize:'12.5px', color:'color-mix(in srgb, var(--color-text) 55%, transparent)', marginTop:'2px'}}, subtitles[state.activeTab])
+    ),
+    h('div', {style:{display:'flex', alignItems:'center', gap:'6px', padding:'6px 12px', borderRadius:'20px', border:'1px solid var(--color-divider)'}},
+      h('div', {style:{width:'7px', height:'7px', borderRadius:'50%', background:'var(--color-accent)'}}),
+      h('span', {style:{fontSize:'12px', fontWeight:'600', color:'var(--color-accent-300)'}}, 'Online')
+    )
+  );
+}
+
+function renderCategorySwitcher(){
+  var cats = [{id:'tattoos', label:'Tattoos'}, {id:'braids', label:'Braids'}, {id:'caps', label:'Caps'}, {id:'other', label:'Other'}];
+  return h('div', {style:{padding:'2px 20px 12px', flexShrink:'0'}},
+    h('div', {class:'seg', style:{width:'100%'}},
+      cats.map(function(c){
+        var isActive = state.category === c.id && state.activeTab === 'register';
+        return h('div', {class:'seg-opt', style:{
+          flex:'1', justifyContent:'center', color: isActive ? 'var(--color-accent)' : 'var(--color-text)',
+          boxShadow: isActive ? 'inset 0 0 0 1px var(--color-accent)' : 'none',
+          fontWeight:'500', fontSize:'15px', backgroundColor:'#1B141D', height:'52px'
+        }, onclick: function(){ setState({category:c.id, activeTab:'register'}); }}, c.label);
+      })
+    )
+  );
+}
+
+function collapsibleBar(label, isOpen, toggle){
+  return h('div', {onclick: toggle, style:{display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer',
+    padding:'12px', marginBottom:'12px', borderRadius:'10px', backgroundColor: CONFIG.braidMenuBarBg, width:'100%'}},
+    h('span', {style:{fontSize:'13px', fontWeight:'600', color:'color-mix(in srgb, var(--color-text) 60%, transparent)'}}, label),
+    h('span', {style:{fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 60%, transparent)', fontWeight:'600'}}, isOpen ? '▾ Hide' : '▸ Show')
+  );
+}
+
+function renderTattooCategory(){
+  var cartIndex = {}; state.cart.forEach(function(c){ cartIndex[c.id] = c.qty; });
+  var keys = ['1','2','3','4','5','6','7','8','9','⌫','0','⏎'];
+  var previewText = state.tattooPreviewLoading ? 'Checking price…' :
+    (state.tattooPreview != null ? (state.tattooPreviewName ? state.tattooPreviewName + ' — ' : '') + CUR(state.tattooPreview) : '');
+  return [
+    collapsibleBar('Tattoo keypad', state.tattooMenuOpen, function(){ setState(function(s){ return {tattooMenuOpen: !s.tattooMenuOpen}; }); }),
+    state.tattooMenuOpen ? h('div', {},
+      h('div', {class:'card', style:{padding:'18px 16px', textAlign:'center', boxShadow:'var(--shadow-sm)', marginBottom:'12px'}},
+        h('div', {style:{fontSize:'11px', color:'color-mix(in srgb, var(--color-text) 50%, transparent)', letterSpacing:'0.06em', marginBottom:'8px'}}, 'ENTER TATTOO #'),
+        h('div', {style:{fontSize:'36px', fontWeight:'700', fontFamily:'var(--font-mono)', color:'var(--color-text)', minHeight:'44px', letterSpacing:'0.04em'}}, state.tattooInput || '—'),
+        previewText ? h('div', {style:{fontSize:'16px', fontWeight:'700', color:'var(--color-accent-300)', marginTop:'2px'}}, previewText) : null,
+        state.tattooError ? h('div', {style:{fontSize:'12.5px', color:'#e0879a', marginTop:'6px'}}, state.tattooError) : null,
+        state.tattooAdded ? h('div', {style:{fontSize:'14px', color:'var(--color-accent-300)', marginTop:'6px'}}, state.tattooAdded) : null
+      ),
+      h('div', {style:{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px'}},
+        keys.map(function(label){
+          var isEnter = label === '⏎', isBack = label === '⌫';
+          var enterBusy = isEnter && state.tattooLoading;
+          return h('div', {style:{
+            height:'52px', borderRadius:'12px', background: isEnter ? (enterBusy ? 'var(--color-accent-700)' : 'var(--color-accent)') : 'var(--color-surface)',
+            display:'flex', alignItems:'center', justifyContent:'center', fontSize:'22px', fontWeight:'600',
+            color: isEnter ? 'var(--color-bg)' : 'var(--color-text)', cursor:'pointer', boxShadow:'var(--shadow-sm)',
+            opacity: enterBusy ? '0.7' : '1'
+          }, onclick: isEnter ? tattooEnter : (isBack ? tattooBackspace : function(){ tattooDigit(label); })}, enterBusy ? '…' : label);
+        })
+      )
+    ) : null
+  ];
+}
+
+function renderBraidCategory(){
+  var cartIndex = {}; state.cart.forEach(function(c){ cartIndex[c.id] = c.qty; });
+  var source = (state.sheetBraids && state.sheetBraids.length) ? state.sheetBraids : BRAIDS.map(function(b){ return {name:b.name, price:b.price}; });
+  return [
+    collapsibleBar('Braid menu', state.braidMenuOpen, function(){ setState(function(s){ return {braidMenuOpen: !s.braidMenuOpen}; }); }),
+    state.braidMenuOpen ? h('div', {style:{display:'flex', flexDirection:'column', gap:'12px', marginBottom:'14px'}},
+      source.map(function(b){
+        var id = 'braid-' + b.name;
+        var inCart = !!cartIndex[id];
+        return h('div', {class:'card elev-sm', style:{flexDirection:'row', alignItems:'center', cursor:'pointer', padding:'12px'},
+          onclick: function(){ addItem({id:id, name:b.name, price:Number(b.price), category:'braids'}); }},
+          h('div', {style:{width:'30px', height:'30px', borderRadius:'30px', flexShrink:'0', backgroundColor:'#652A5FEB'}}),
+          h('div', {style:{flex:'1', padding:'0 12px'}},
+            h('div', {style:{fontSize:'15px', fontWeight:'600', color:'var(--color-text)'}}, b.name)
+          ),
+          h('div', {style:{textAlign:'right'}},
+            h('div', {style:{fontSize:'15px', fontWeight:'700', color:'var(--color-accent-300)', fontFamily:'var(--font-mono)'}}, CUR(Number(b.price))),
+            inCart ? h('div', {style:{fontSize:'11px', color:'color-mix(in srgb, var(--color-text) 50%, transparent)', marginTop:'2px'}}, '×' + cartIndex[id] + ' in order') : null
+          )
+        );
+      })
+    ) : null
+  ];
+}
+
+function renderOtherCategory(){
+  var cartIndex = {}; state.cart.forEach(function(c){ cartIndex[c.id] = c.qty; });
+  var list = (state.sheetOthers && state.sheetOthers.length) ? state.sheetOthers : [];
+  return [
+    collapsibleBar('Other menu', state.otherMenuOpen, function(){ setState(function(s){ return {otherMenuOpen: !s.otherMenuOpen}; }); }),
+    state.otherMenuOpen ? h('div', {style:{display:'flex', flexDirection:'column', gap:'12px', marginBottom:'14px'}},
+      list.length ? list.map(function(o){
+        var id = 'other-' + o.name;
+        var inCart = !!cartIndex[id];
+        return h('div', {class:'card elev-sm', style:{flexDirection:'row', alignItems:'center', cursor:'pointer', padding:'12px'},
+          onclick: function(){ addItem({id:id, name:o.name, price:Number(o.price), category:'other'}); }},
+          h('div', {style:{width:'30px', height:'30px', borderRadius:'30px', flexShrink:'0', backgroundColor:'#652A5FEB'}}),
+          h('div', {style:{flex:'1', padding:'0 12px'}}, h('div', {style:{fontSize:'15px', fontWeight:'600', color:'var(--color-text)'}}, o.name)),
+          h('div', {style:{textAlign:'right'}},
+            h('div', {style:{fontSize:'15px', fontWeight:'700', color:'var(--color-accent-300)', fontFamily:'var(--font-mono)'}}, CUR(Number(o.price))),
+            inCart ? h('div', {style:{fontSize:'11px', color:'color-mix(in srgb, var(--color-text) 50%, transparent)', marginTop:'2px'}}, '×' + cartIndex[id] + ' in order') : null
+          )
+        );
+      }) : h('div', {style:{fontSize:'12.5px', color:'color-mix(in srgb, var(--color-text) 50%, transparent)', padding:'4px 2px'}}, 'No "Other" products loaded from the sheet yet.')
+    ) : null
+  ];
+}
+
+function renderCapCategory(){
+  var isCustom = state.capType === 'custom';
+  return [
+    collapsibleBar('Cap menu', state.capMenuOpen, function(){ setState(function(s){ return {capMenuOpen: !s.capMenuOpen}; }); }),
+    state.capMenuOpen ? h('div', {class:'card', style:{padding:'16px', boxShadow:'none'}},
+      h('div', {class:'seg', style:{marginBottom:'14px'}},
+        h('div', {class:'seg-opt', style:{
+          flex:'1', justifyContent:'center', fontWeight:'600', height:'52px',
+          color: isCustom ? 'var(--color-accent)' : 'var(--color-text)',
+          border: (isCustom ? '2px solid var(--color-accent)' : '2px solid transparent'),
+          backgroundColor: isCustom ? '#C12ABE32' : 'transparent'
+        }, onclick: function(){ selectCapType('custom'); }}, 'Custom cap'),
+        h('div', {class:'seg-opt', style:{
+          flex:'1', justifyContent:'center', fontWeight:'600', height:'52px',
+          color: !isCustom ? 'var(--color-accent)' : 'var(--color-text)',
+          border: (!isCustom ? '2px solid var(--color-accent)' : '2px solid transparent'),
+          backgroundColor: !isCustom ? '#C12ABE32' : 'transparent'
+        }, onclick: function(){ selectCapType('regular'); }}, 'Regular cap')
+      ),
+      isCustom ? h('div', {class:'field', style:{marginBottom:'14px'}},
+        h('label', {}, 'PERSO CAP'),
+        h('input', {class:'input', type:'text', placeholder:'Type a Name', value: state.capText, dataField:'capText',
+          maxlength:'12', style:{width:'100%', height:'45px'},
+          oninput: function(e){ setState({capText: e.target.value}); }})
+      ) : null,
+      h('div', {style:{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px'}},
+        h('span', {style:{fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 60%, transparent)'}},
+          state.capPriceLoading ? 'Checking price…' : (isCustom ? 'Custom cap' : 'Regular cap')),
+        h('span', {style:{fontSize:'16px', fontWeight:'700', color:'var(--color-accent-300)', fontFamily:'var(--font-mono)'}}, CUR(state.capPrice))
+      ),
+      h('div', {class:'btn btn-primary btn-block', style:{height:'57px', fontSize:'15px'}, onclick: addCapToCart}, 'Add cap to order')
+    ) : null
+  ];
+}
+
+function renderCurrentOrder(){
+  if (!state.cart.length) return null;
+  var categoryBg = {tattoos: CONFIG.tattooItemBg, braids: CONFIG.braidItemBg, caps: CONFIG.capItemBg, other: CONFIG.otherItemBg};
+  return h('div', {style:{marginTop:'18px'}},
+    h('div', {style:{fontSize:'12px', fontWeight:'500', color:'color-mix(in srgb, var(--color-text) 50%, transparent)', letterSpacing:'0.04em', marginBottom:'8px'}}, 'Current Order'),
+    h('div', {style:{display:'flex', flexDirection:'column', gap:'8px'}},
+      state.cart.map(function(c){
+        return h('div', {style:{display:'flex', alignItems:'center', gap:'10px', background: categoryBg[c.category] || 'var(--color-surface)', borderRadius:'10px', padding:'10px 12px', minHeight:'46px'}},
+          h('div', {style:{flex:'1', fontSize:'13.5px', color:'var(--color-text)'}}, c.name),
+          h('div', {style:{width:'24px', height:'24px', borderRadius:'7px', border:'1px solid color-mix(in srgb, var(--color-text) 16%, transparent)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:'15px', fontWeight:'700'}, onclick: function(){ decQty(c.id); }}, '–'),
+          h('span', {style:{fontSize:'13px', fontWeight:'700', minWidth:'14px', textAlign:'center'}}, String(c.qty)),
+          h('div', {style:{width:'24px', height:'24px', borderRadius:'7px', border:'1px solid color-mix(in srgb, var(--color-text) 16%, transparent)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:'15px', fontWeight:'700'}, onclick: function(){ incQty(c.id); }}, '+'),
+          h('div', {style:{width:'56px', textAlign:'right', fontSize:'13px', fontWeight:'700', fontFamily:'var(--font-mono)'}}, CUR(c.price * c.qty))
+        );
+      })
+    )
+  );
+}
+
+function renderRegisterTab(){
+  var body;
+  if (state.category === 'tattoos') body = renderTattooCategory();
+  else if (state.category === 'braids') body = renderBraidCategory();
+  else if (state.category === 'caps') body = renderCapCategory();
+  else body = renderOtherCategory();
+  return h('div', {style:{padding:'10px 20px'}}, body, renderCurrentOrder());
+}
+
+function renderOrdersTab(){
+  var source = (state.sheetOrdersToday && state.sheetOrdersToday.length) ? state.sheetOrdersToday : state.orders;
+  return h('div', {},
+    state.dailyRefreshBusy && state.showUpdatingIndicator ? h('div', {style:{padding:'2px 20px 8px', fontSize:'12px', color:'var(--color-accent-300)'}}, 'Updating…') : null,
+    h('div', {style:{padding:'2px 20px 0', display:'flex', flexDirection:'column', gap:'10px'}},
+      source.length ? source.map(function(o){
+        var total = o.lines.reduce(function(sum, l){ return sum + l.price * l.qty; }, 0);
+        var expanded = state.expandedOrderId === o.id;
+        return h('div', {class:'card elev-sm', style:{padding:'0', gap:'0', overflow:'hidden'}},
+          h('div', {style:{padding:'14px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', backgroundColor:'#57335D37'},
+            onclick: function(){ setState({expandedOrderId: expanded ? null : o.id}); }},
+            h('div', {},
+              h('div', {style:{fontSize:'15px', fontWeight:'600', color:'var(--color-text)'}}, o.id),
+              h('div', {style:{fontSize:'12px', color:'color-mix(in srgb, var(--color-text) 55%, transparent)', marginTop:'3px'}}, o.time + ' · ' + o.kioskId + ' · ' + o.method)
+            ),
+            h('div', {style:{fontFamily:'var(--font-mono)', fontSize:'16px', fontWeight:'700', color:'var(--color-text)'}}, CUR(total))
+          ),
+          expanded ? h('div', {style:{padding:'8px 16px 14px', borderTop:'1px solid #D984C6', backgroundColor:'#5C265B'}},
+            o.lines.map(function(l){
+              return h('div', {style:{display:'flex', justifyContent:'space-between', padding:'8px 0', fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 70%, transparent)', fontFamily:'var(--font-mono)'}},
+                h('span', {}, l.qty + '× ' + l.name), h('span', {}, CUR(l.price * l.qty))
+              );
+            })
+          ) : null
+        );
+      }) : h('div', {style:{fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 50%, transparent)', padding:'20px 2px', textAlign:'center'}}, 'No orders yet today.')
+    )
+  );
+}
+
+function renderReportsTab(){
+  var dt = state.dailyTotals;
+  var useDailySheet = !!(dt && dt.grandTotal != null);
+  var allTotals = state.orders.map(function(o){ return o.lines.reduce(function(sum,l){ return sum + l.price*l.qty; }, 0); });
+  var localGrandTotal = allTotals.reduce(function(a,b){ return a+b; }, 0);
+  var grandTotal = useDailySheet ? Number(dt.grandTotal) : localGrandTotal;
+  var count = useDailySheet ? Number(dt.count || 0) : state.orders.length;
+  var avg = count ? grandTotal / count : 0;
+
+  var catTotals = {Tattoos:0, Braids:0, Caps:0};
+  state.orders.forEach(function(o){ o.lines.forEach(function(l){
+    var key = l.name.indexOf('Cap') >= 0 ? 'Caps' : (BRAIDS.some(function(b){ return b.name === l.name; }) ? 'Braids' : 'Tattoos');
+    catTotals[key] += l.price * l.qty;
+  }); });
+  var catSum = Object.values(catTotals).reduce(function(a,b){ return a+b; }, 0) || 1;
+
+  var methodCounts = {}, methodTotals = {};
+  if (useDailySheet && dt.methodTotals) {
+    Object.keys(dt.methodTotals).forEach(function(m){ methodTotals[m] = Number(dt.methodTotals[m]); methodCounts[m] = 1; });
+  } else {
+    state.orders.forEach(function(o){
+      methodCounts[o.method] = (methodCounts[o.method] || 0) + 1;
+      var t = o.lines.reduce(function(sum,l){ return sum + l.price*l.qty; }, 0);
+      methodTotals[o.method] = (methodTotals[o.method] || 0) + t;
+    });
+  }
+  var methodSum = Object.values(methodTotals).reduce(function(a,b){ return a+b; }, 0) || 1;
+
+  function bar(name, label, pct, color){
+    return h('div', {},
+      h('div', {style:{display:'flex', justifyContent:'space-between', fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 75%, transparent)', marginBottom:'5px'}},
+        h('span', {}, name), h('span', {style:{fontFamily:'var(--font-mono)'}}, label)),
+      h('div', {style:{height:'6px', borderRadius:'3px', background:'var(--color-neutral-900)', overflow:'hidden'}},
+        h('div', {style:{height:'100%', borderRadius:'3px', background:color, width:pct + '%'}}))
+    );
+  }
+
+  return h('div', {},
+    state.dailyRefreshBusy && state.showUpdatingIndicator ? h('div', {style:{padding:'2px 20px 8px', fontSize:'12px', color:'var(--color-accent-300)'}}, 'Updating…') : null,
+    h('div', {style:{padding:'2px 20px 0'}},
+      h('div', {style:{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginBottom:'22px'}},
+        h('div', {class:'card elev-sm', style:{textAlign:'center', padding:'14px 6px', gap:'4px', backgroundColor:'#1E403A'}},
+          h('div', {style:{fontSize:'17px', fontWeight:'700', color:'#5FCCB5', fontFamily:'var(--font-mono)'}}, CUR(grandTotal)),
+          h('div', {style:{fontSize:'10px', color:'color-mix(in srgb, var(--color-text) 50%, transparent)', fontWeight:'600', letterSpacing:'0.05em'}}, 'SALES TODAY')),
+        h('div', {class:'card elev-sm', style:{textAlign:'center', padding:'14px 6px', gap:'4px'}},
+          h('div', {style:{fontSize:'17px', fontWeight:'700', color:'var(--color-text)', fontFamily:'var(--font-mono)'}}, String(count)),
+          h('div', {style:{fontSize:'10px', color:'color-mix(in srgb, var(--color-text) 50%, transparent)', fontWeight:'600', letterSpacing:'0.05em'}}, 'ORDERS')),
+        h('div', {class:'card elev-sm', style:{textAlign:'center', padding:'14px 6px', gap:'4px'}},
+          h('div', {style:{fontSize:'17px', fontWeight:'700', color:'var(--color-text)', fontFamily:'var(--font-mono)'}}, CUR(avg)),
+          h('div', {style:{fontSize:'10px', color:'color-mix(in srgb, var(--color-text) 50%, transparent)', fontWeight:'600', letterSpacing:'0.05em'}}, 'AVG TICKET'))
+      ),
+      h('div', {style:{fontSize:'13px', fontWeight:'600', color:'var(--color-text)', marginBottom:'12px'}}, 'By category'),
+      h('div', {style:{display:'flex', flexDirection:'column', gap:'12px', marginBottom:'24px'}},
+        Object.keys(catTotals).map(function(name){ return bar(name, CUR(catTotals[name]), Math.round(catTotals[name]/catSum*100), 'var(--color-accent)'); })
+      ),
+      h('div', {style:{fontSize:'13px', fontWeight:'600', color:'var(--color-text)', marginBottom:'12px'}}, 'Payment mix'),
+      h('div', {style:{display:'flex', flexDirection:'column', gap:'12px'}},
+        PAY_METHODS.filter(function(p){ return methodTotals[p.label]; }).map(function(p){
+          return bar(p.label, (methodCounts[p.label]||0) + ' · ' + CUR(methodTotals[p.label]||0), Math.round((methodTotals[p.label]||0)/methodSum*100), '#24B38E');
+        })
+      )
+    )
+  );
+}
+
+function renderKiosksTab(){
+  var kioskNames = (state.sheetKiosks && state.sheetKiosks.length) ? state.sheetKiosks : KIOSKS.map(function(k){ return k.name; });
+  return h('div', {style:{padding:'2px 20px 0', display:'flex', flexDirection:'column', gap:'10px'}},
+    h('div', {class:'card elev-sm', style:{flexDirection:'row', alignItems:'center', justifyContent:'space-between'}},
+      h('div', {},
+        h('div', {style:{fontSize:'15px', fontWeight:'600', color:'var(--color-text)'}}, state.staffName),
+        h('div', {style:{fontSize:'12.5px', color:'color-mix(in srgb, var(--color-text) 55%, transparent)', marginTop:'4px'}}, 'Signed in · ' + (state.staffShop || state.activeKioskId))
+      ),
+      h('div', {style:{fontSize:'13px', fontWeight:'600', color:'#e0879a', cursor:'pointer'}, onclick: logout}, 'Log out')
+    ),
+    h('div', {class:'card elev-sm', style:{flexDirection:'row', alignItems:'center', justifyContent:'space-between', cursor:'pointer', minHeight:'63px'}, onclick: toggleAdminGate},
+      h('span', {style:{fontSize:'14px', fontWeight:'600', color:'var(--color-accent-300)'}}, 'Admin options'),
+      h('span', {style:{fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 45%, transparent)'}}, '›')
+    ),
+    state.adminUnlocked ? h('div', {class:'card elev-sm', style:{gap:'8px'}},
+      h('div', {style:{fontSize:'13px', fontWeight:'600', color:'var(--color-text)'}}, 'Sheet data cache'),
+      h('div', {style:{fontSize:'12px', color:'color-mix(in srgb, var(--color-text) 55%, transparent)'}},
+        state.refreshMsg || (state.cacheUpdatedAt && state.cachedTattoos && state.cachedTattoos.length ? 'Last synced ' + new Date(state.cacheUpdatedAt).toLocaleTimeString() : 'Not yet synced')),
+      h('div', {class:'btn btn-secondary btn-block', onclick: function(){ refreshSheetData(true); refreshDailyTotals(true); }},
+        (state.refreshBusy || state.dailyRefreshBusy) ? 'Refreshing…' : 'Refresh data from sheet'),
+      h('div', {style:{display:'flex', alignItems:'center', justifyContent:'space-between', paddingTop:'6px'}},
+        h('span', {style:{fontSize:'13px', color:'var(--color-text)'}}, 'Show "Updating…" indicator'),
+        h('span', {style:{fontSize:'13px', fontWeight:'600', color:'var(--color-accent-300)', cursor:'pointer'}, onclick: function(){ setState(function(s){ return {showUpdatingIndicator: !s.showUpdatingIndicator}; }); }},
+          state.showUpdatingIndicator ? 'Shown' : 'Hidden')
+      )
+    ) : null,
+    state.adminOpen ? h('div', {class:'card elev-sm', style:{gap:'10px'}},
+      h('div', {style:{fontSize:'13px', fontWeight:'600', color:'var(--color-text)'}}, 'Enter admin PIN'),
+      h('input', {type:'password', value: state.adminPinInput, dataField:'adminPin', class:'input', placeholder:'PIN', style:{width:'100%'},
+        oninput: function(e){ updateAdminPin(e.target.value); },
+        onkeydown: function(e){ if (e.key === 'Enter') checkAdminPin(); }}),
+      state.adminError ? h('div', {style:{fontSize:'12px', color:'#e0879a'}}, state.adminError) : null,
+      h('div', {class:'btn btn-primary btn-block', style:{height:'58px'}, onclick: checkAdminPin}, 'Unlock')
+    ) : null,
+    state.adminUnlocked ? kioskNames.map(function(name){
+      var totalForKiosk = state.orders.filter(function(o){ return o.kioskId === name; })
+        .reduce(function(sum,o){ return sum + o.lines.reduce(function(s2,l){ return s2 + l.price*l.qty; }, 0); }, 0);
+      var salesLabel = CUR(useDaily(name, totalForKiosk));
+      var isActive = state.activeKioskId === name;
+      return h('div', {class:'card elev-sm', style:{flexDirection:'row', alignItems:'center', justifyContent:'space-between', cursor:'pointer'},
+        onclick: function(){ setState({activeKioskId:name, activeTab:'register'}); }},
+        h('div', {},
+          h('div', {style:{fontSize:'15px', fontWeight:'600', color:'var(--color-text)', display:'flex', alignItems:'center', gap:'8px'}},
+            name, isActive ? h('span', {class:'tag tag-outline'}, 'ACTIVE') : null),
+          h('div', {style:{fontSize:'12.5px', color:'color-mix(in srgb, var(--color-text) 55%, transparent)', marginTop:'4px'}}, salesLabel + ' today')
+        ),
+        h('div', {style:{display:'flex', alignItems:'center', gap:'6px'}},
+          h('div', {style:{width:'7px', height:'7px', borderRadius:'50%', background:'var(--color-accent)'}}),
+          h('span', {style:{fontSize:'12px', fontWeight:'600', color:'var(--color-accent-300)'}}, 'Online')
+        )
+      );
+    }) : null
+  );
+
+  function useDaily(name, fallbackVal){
+    var dt = state.dailyTotals;
+    if (dt && dt.kioskTotals && dt.kioskTotals[name] != null) return Number(dt.kioskTotals[name]);
+    return fallbackVal;
+  }
+}
+
+function renderCartBar(){
+  if (!state.cart.length || state.sheetStep) return null;
+  var count = state.cart.reduce(function(sum,c){ return sum + c.qty; }, 0);
+  return h('div', {onclick: function(){ setState({sheetStep:'payment'}); }, style:{
+    position:'absolute', left:'16px', right:'16px', bottom:'92px', background:'var(--color-surface)',
+    border:'1.5px solid var(--color-accent)', borderRadius:'14px', padding:'14px 18px', display:'flex',
+    alignItems:'center', justifyContent:'space-between', cursor:'pointer', boxShadow:'var(--shadow-md)', zIndex:'30'
+  }},
+    h('div', {style:{display:'flex', alignItems:'center', gap:'10px'}},
+      h('div', {style:{width:'26px', height:'26px', borderRadius:'8px', background:'var(--color-accent)', color:'var(--color-bg)', fontSize:'13px', fontWeight:'700', display:'flex', alignItems:'center', justifyContent:'center'}}, String(count)),
+      h('span', {style:{color:'var(--color-text)', fontSize:'15px', fontWeight:'600'}}, 'Charge order')
+    ),
+    h('span', {style:{color:'var(--color-accent-300)', fontSize:'16px', fontWeight:'700', fontFamily:'var(--font-mono)'}}, CUR(cartTotal()))
+  );
+}
+
+function renderTabBar(){
+  var tabs = [{id:'register', label:'Register'}, {id:'orders', label:'Orders'}, {id:'reports', label:'Reports'}, {id:'kiosks', label:'Kiosks'}];
+  return h('div', {style:{position:'absolute', left:'0', right:'0', bottom:'0', background:'rgba(22,24,38,0.94)', backdropFilter:'blur(16px)', borderTop:'1px solid var(--color-divider)', display:'flex', padding:'8px 4px calc(env(safe-area-inset-bottom, 0px) + 10px)', zIndex:'20'}},
+    tabs.map(function(t){
+      var active = state.activeTab === t.id;
+      return h('div', {style:{flex:'1', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', padding:'12px 0'},
+        onclick: function(){ setState({activeTab:t.id}); if (t.id === 'orders' || t.id === 'reports') refreshDailyTotals(true); }},
+        h('span', {style:{fontSize:'13px', fontWeight:'600', color: active ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-text) 50%, transparent)'}}, t.label)
+      );
+    })
+  );
+}
+
+function payRow(id, label, tint, borderColor, checkColor, selectedBg){
+  var selected = state.paymentMethod === id;
+  return h('div', {style:{position:'relative'}},
+    h('div', {onclick: function(){ setState({paymentMethod:id}); }, style:{
+      display:'flex', alignItems:'center', gap:'14px', padding:'16px', borderRadius:'14px', cursor:'pointer',
+      border: selected ? '1.5px solid ' + borderColor : '1.5px solid var(--color-divider)',
+      background: selected ? selectedBg : tint
+    }},
+      h('span', {style:{fontSize:'16px', fontWeight:'600', color:'var(--color-text)', flex:'1'}}, label),
+      selected ? svg('M1 7l6 6L17 1', 18, 14, checkColor) : null
+    )
+  );
+}
+
+function renderPaymentSheet(){
+  var lines = state.cart;
+  return h('div', {style:{display:'flex', flexDirection:'column', height:'100%', overflow:'hidden'}},
+    h('div', {style:{textAlign:'center', padding:'8px 20px 4px', flexShrink:'0'}},
+      h('span', {style:{fontSize:'18px', fontWeight:'600', color:'var(--color-text)'}}, 'Payment')),
+    h('div', {style:{textAlign:'center', padding:'16px 0 22px', flexShrink:'0'}},
+      h('div', {style:{fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 55%, transparent)'}}, 'Amount due'),
+      h('div', {style:{fontSize:'38px', fontWeight:'700', color:'var(--color-text)', fontFamily:'var(--font-mono)', marginTop:'2px'}}, CUR(cartTotal()))
+    ),
+    h('div', {class:'kx-scroll', style:{flex:'1', overflowY:'auto', padding:'0 20px', display:'flex', flexDirection:'column', gap:'12px'}},
+      h('div', {onclick: function(){ setState(function(s){ return {orderReviewOpen: !s.orderReviewOpen}; }); }, style:{
+        display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'12px', marginBottom:'4px', borderRadius:'10px', backgroundColor:'#2C2E3C'
+      }},
+        h('span', {style:{fontSize:'13px', fontWeight:'600', color:'color-mix(in srgb, var(--color-text) 80%, transparent)'}}, 'Order items'),
+        h('span', {style:{fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 80%, transparent)', fontWeight:'600'}}, state.orderReviewOpen ? '▾ Hide' : '▸ Show')
+      ),
+      state.orderReviewOpen ? h('div', {style:{borderRadius:'12px', padding:'6px 16px', marginBottom:'4px', backgroundColor:'#2C2E3C'}},
+        lines.map(function(cl){
+          return h('div', {style:{display:'flex', justifyContent:'space-between', padding:'6px 0', fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 70%, transparent)', fontFamily:'var(--font-mono)'}},
+            h('span', {}, cl.qty + '× ' + cl.name), h('span', {}, CUR(cl.price * cl.qty)));
+        })
+      ) : null,
+      payRow('cash', 'Cash', '#1E3230', '#6CD5A2', '#6CD5A2', '#1E3A31'),
+      payRow('card', 'Card / phone card', '#1531528F', '#85AFF6', '#85AFF6', '#113D7EB7'),
+      payRow('revolut', 'Revolut', '#281E32AB', 'var(--color-accent)', '#C86BCC', 'color-mix(in srgb, #9184d9 10%, transparent)'),
+      payRow('mbway', 'MB WAY', '#281E32AA', '#9184d9', '#9184d9', 'color-mix(in srgb, #9184d9 10%, transparent)'),
+      payRow('other', 'Other', '#281E3293', '#9184d9', '#9184d9', 'color-mix(in srgb, #9184d9 10%, transparent)')
+    ),
+    h('div', {style:{flexShrink:'0', padding:'16px 20px 20px', display:'flex', flexDirection:'column', gap:'10px'}},
+      h('div', {onclick: function(){ setState({sheetStep:null, paymentMethod:null}); }, style:{
+        display:'flex', alignItems:'center', gap:'14px', padding:'16px', borderRadius:'8px', cursor:'pointer', backgroundColor:'#402547', justifyContent:'center'
+      }}, h('span', {style:{fontSize:'15px', fontWeight:'500', color:'var(--color-accent-300)', textAlign:'center'}}, 'Add | Remove Product')),
+      h('div', {class:'btn btn-primary btn-block' + (state.paymentMethod ? '' : ' btn-disabled'), style:{
+        height:'52px', fontSize:'16px', background:'var(--color-accent)', color:'var(--color-bg)', borderColor:'var(--color-accent)',
+        opacity: state.paymentMethod ? '1' : '0.4'
+      }, onclick: confirmPayment}, 'Confirm payment')
+    )
+  );
+}
+
+function renderSuccessSheet(){
+  var lo = state.lastOrder;
+  if (!lo) return null;
+  return h('div', {style:{display:'flex', flexDirection:'column', alignItems:'center', height:'100%', overflowY:'auto', padding:'26px 24px 24px', textAlign:'center'}},
+    h('div', {style:{width:'60px', height:'60px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', animation:'popIn 0.4s ease-out', backgroundColor:'#51C389'}},
+      (function(){
+        var ns = 'http://www.w3.org/2000/svg';
+        var s = document.createElementNS(ns, 'svg'); s.setAttribute('width','28'); s.setAttribute('height','22'); s.setAttribute('viewBox','0 0 30 24');
+        var p = document.createElementNS(ns, 'path'); p.setAttribute('d','M2 13l9 8L28 2'); p.setAttribute('stroke','var(--color-bg)');
+        p.setAttribute('stroke-width','3.5'); p.setAttribute('fill','none'); p.setAttribute('stroke-linecap','round'); p.setAttribute('stroke-linejoin','round');
+        p.setAttribute('pathLength','1'); p.style.strokeDasharray='1'; p.style.strokeDashoffset='1'; p.style.animation='checkDraw 0.35s 0.25s ease-out forwards';
+        s.appendChild(p); return s;
+      })()
+    ),
+    h('div', {style:{fontSize:'19px', fontWeight:'600', color:'var(--color-text)', marginTop:'16px'}}, 'Sale complete'),
+    h('div', {style:{fontSize:'13px', color:'color-mix(in srgb, var(--color-text) 55%, transparent)', marginTop:'4px'}}, lo.id + ' · ' + lo.method),
+    h('div', {style:{fontSize:'32px', fontWeight:'700', color:'#53EF9D', fontFamily:'var(--font-mono)', marginTop:'14px'}}, CUR(lo.total)),
+    h('div', {style:{width:'100%', background:'var(--color-surface)', borderRadius:'12px', marginTop:'22px', padding:'14px 16px', textAlign:'left'}},
+      lo.lines.map(function(ll){
+        return h('div', {style:{display:'flex', justifyContent:'space-between', padding:'6px 0', fontSize:'14px', color:'color-mix(in srgb, var(--color-text) 70%, transparent)', fontFamily:'var(--font-mono)'}},
+          h('span', {}, ll.qty + '× ' + ll.name), h('span', {}, CUR(ll.price * ll.qty)));
+      })
+    ),
+    h('div', {class:'btn', style:{height:'61px', fontSize:'15px', marginTop:'22px', color:'#51C389', border:'2px solid #6DDDA1', backgroundColor:'#D6F5C11D', width:'100%'},
+      onclick: function(){ setState({sheetStep:null, lastOrder:null}); }}, 'New sale')
+  );
+}
+
+function renderSheet(){
+  var isOpen = state.sheetStep === 'payment' || state.sheetStep === 'success';
+  return h('div', {style:{
+    position:'absolute', left:'0', right:'0', bottom:'0', height:'90%', background:'var(--color-bg)',
+    borderRadius:'22px 22px 0 0', boxShadow:'0 -1px 0 var(--color-neutral-800), 0 -20px 50px rgba(0,0,0,0.55)',
+    zIndex:'40', display:'flex', flexDirection:'column', transition:'transform 0.32s cubic-bezier(.22,1,.36,1)',
+    transform: isOpen ? 'translateY(0)' : 'translateY(100%)'
+  }},
+    h('div', {style:{width:'36px', height:'5px', borderRadius:'3px', background:'var(--color-neutral-800)', margin:'12px auto 6px', flexShrink:'0'}}),
+    state.sheetStep === 'payment' ? renderPaymentSheet() : null,
+    state.sheetStep === 'success' ? renderSuccessSheet() : null
+  );
+}
+
+function renderApp(){
+  var scrollBottomPad = (state.cart.length > 0 && !state.sheetStep) ? '190px' : '118px';
+  var tabContent;
+  if (state.activeTab === 'register') tabContent = renderRegisterTab();
+  else if (state.activeTab === 'orders') tabContent = renderOrdersTab();
+  else if (state.activeTab === 'reports') tabContent = renderReportsTab();
+  else tabContent = renderKiosksTab();
+
+  return h('div', {style:{
+    position:'relative', height:'100%', minHeight:'100dvh', display:'flex', flexDirection:'column', overflow:'hidden',
+    background:'var(--color-bg)', color:'var(--color-text)'
+  }},
+    renderLoginOverlay(),
+    renderHeader(),
+    renderCategorySwitcher(),
+    h('div', {class:'kx-scroll', style:{flex:'1', overflowY:'auto', paddingBottom: scrollBottomPad}}, tabContent),
+    renderCartBar(),
+    renderTabBar(),
+    renderSheet()
+  );
+}
+
+/* ============================== INIT =================================== */
+function init(){
+  _idleTimer = null;
+  ['pointerdown','keydown','touchstart'].forEach(function(evt){ window.addEventListener(evt, resetIdleTimer); });
+  resetIdleTimer();
+  try {
+    var raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      var cache = JSON.parse(raw);
+      Object.assign(state, {
+        sheetBraids: cache.braids || null, sheetKiosks: cache.kiosks || null,
+        cachedTattoos: cache.tattoos || null, cachedStaff: cache.staff || null,
+        cachedCapPrices: cache.capPrices || null, cachedCapNames: cache.capNames || null,
+        sheetOthers: cache.others || null, cacheUpdatedAt: cache.updatedAt || null
+      });
+    }
+    var rawOrders = localStorage.getItem(ORDERS_CACHE_KEY);
+    if (rawOrders) {
+      var oc = JSON.parse(rawOrders);
+      if (oc.dateStr === new Date().toDateString()) state.sheetOrdersToday = oc.orders;
+    }
+    var rawDaily = localStorage.getItem(DAILY_CACHE_KEY);
+    if (rawDaily) {
+      var daily = JSON.parse(rawDaily);
+      if (daily.dateStr === new Date().toDateString()) state.dailyTotals = daily;
+    }
+  } catch (err) { console.error('Cache load failed:', err); }
+
+  doRender();
+  refreshSheetData(false);
+  refreshDailyTotals(false);
+
+  if ('serviceWorker' in navigator) {
+    // Optional: no service worker file shipped yet, so skip silently if missing.
+  }
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+
+})();
+</script>
+</body>
+</html>
