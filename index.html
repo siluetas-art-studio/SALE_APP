@@ -190,6 +190,11 @@ function svg(pathD, w, h_, stroke, extra){
 function setState(patch){
   var next = (typeof patch === 'function') ? patch(state) : patch;
   Object.assign(state, next);
+  // Re-evaluate the idle timer against the FRESH state on every change (not just on the
+  // raw tap/click that triggered it). This is what correctly pauses/resumes auto-logout
+  // right when a cart becomes non-empty/empty or the payment sheet opens/closes, instead
+  // of depending on the timing of whichever DOM event happened to cause the change.
+  resetIdleTimer();
   scheduleRender();
 }
 var _renderQueued = false;
@@ -219,7 +224,6 @@ function doRender(){
 
 /* ============================== BUSINESS LOGIC ========================= */
 function addItem(item){
-  if (_idleTimer) clearTimeout(_idleTimer);
   setState(function(s){
     var cart = s.cart.slice();
     var i = cart.findIndex(function(c){ return c.id === item.id; });
@@ -925,7 +929,12 @@ function renderApp(){
 /* ============================== INIT =================================== */
 function init(){
   _idleTimer = null;
-  ['pointerdown','keydown','touchstart'].forEach(function(evt){ window.addEventListener(evt, resetIdleTimer); });
+  // Any of these count as "staff is present": taps, key presses, and — importantly —
+  // scrolling to read Orders/Reports without tapping anything. 'scroll' doesn't bubble to
+  // window on its own, so it's registered on the capture phase to still catch scrolling
+  // inside the app's internal scroll containers.
+  ['pointerdown','keydown','touchstart','wheel'].forEach(function(evt){ window.addEventListener(evt, resetIdleTimer); });
+  window.addEventListener('scroll', resetIdleTimer, true);
   resetIdleTimer();
   try {
     var raw = localStorage.getItem(CACHE_KEY);
