@@ -663,10 +663,18 @@ function renderReportsTab(){
   var avg = count ? grandTotal / count : 0;
 
   var catTotals = {Tattoos:0, Braids:0, Caps:0};
-  state.orders.forEach(function(o){ o.lines.forEach(function(l){
-    var key = l.name.indexOf('Cap') >= 0 ? 'Caps' : (BRAIDS.some(function(b){ return b.name === l.name; }) ? 'Braids' : 'Tattoos');
-    catTotals[key] += l.price * l.qty;
-  }); });
+  var CAT_KEY_MAP = {tattoos:'Tattoos', braids:'Braids', caps:'Caps'};
+  if (useDailySheet && dt.categoryTotals) {
+    Object.keys(dt.categoryTotals).forEach(function(k){
+      var mapped = CAT_KEY_MAP[String(k).toLowerCase()];
+      if (mapped) catTotals[mapped] = Number(dt.categoryTotals[k]) || 0;
+    });
+  } else {
+    state.orders.forEach(function(o){ o.lines.forEach(function(l){
+      var key = l.name.indexOf('Cap') >= 0 ? 'Caps' : (BRAIDS.some(function(b){ return b.name === l.name; }) ? 'Braids' : 'Tattoos');
+      catTotals[key] += l.price * l.qty;
+    }); });
+  }
   var catSum = Object.values(catTotals).reduce(function(a,b){ return a+b; }, 0) || 1;
 
   var methodCounts = {}, methodTotals = {};
