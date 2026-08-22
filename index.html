@@ -87,7 +87,7 @@
   .icon-btn svg{width:24px;height:24px;}
   .icon-btn.accent{border-color:var(--accent-orange);color:var(--accent-orange);}
   .who{text-align:right;}
-  .who .kiosk{font-family:var(--font-title);font-size:24px;line-height:1;color:var(--text-soft);cursor:pointer;}
+  .who .kiosk{font-family:var(--font-title);font-size:24px;line-height:1;color:var(--text-soft);}
   .who .staff{font-size:18px;color:var(--text-faint);font-style:italic;margin-top:12px;cursor:pointer;}
 
   .pill{
@@ -354,7 +354,7 @@
   <section class="screen pb-bar" id="screen-home">
     <div class="topbar">
       <div></div>
-      <div class="who"><div class="kiosk" onclick="openKioskSwitch()">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
+      <div class="who"><div class="kiosk">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
     </div>
     <div class="grid">
       <button class="tile outline-white" onclick="openRegister('tattoos')">Tattoos</button>
@@ -382,7 +382,7 @@
       <button class="icon-btn" onclick="goto('home')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>
       </button>
-      <div class="who"><div class="kiosk" onclick="openKioskSwitch()">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
+      <div class="who"><div class="kiosk">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
     </div>
     <div id="registerBody"></div>
   </section>
@@ -398,7 +398,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
         </button>
       </div>
-      <div class="who"><div class="kiosk" onclick="openKioskSwitch()">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
+      <div class="who"><div class="kiosk">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
     </div>
     <div id="ordersBody"></div>
   </section>
@@ -409,7 +409,7 @@
       <button class="icon-btn" onclick="goto('home')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>
       </button>
-      <div class="who"><div class="kiosk" onclick="openKioskSwitch()">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
+      <div class="who"><div class="kiosk">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
     </div>
     <div class="pill dark" style="justify-content:center;">Today's Sales</div>
     <div class="stat-hero"><div class="num" id="repTotal">$0</div></div>
@@ -507,6 +507,7 @@ const CACHE_KEY = 'kioskpos_cache_v1';
 const DAILY_CACHE_KEY = 'kioskpos_daily_v1';
 const ORDERS_CACHE_KEY = 'kioskpos_orders_v1';
 const ADMIN_PIN_KEY = 'kioskpos_admin_pin_v1'; // client-side override only — the live backend has no settings-write endpoint
+const ACTIVE_KIOSK_KEY = 'kioskpos_active_kiosk_v1'; // persists which kiosk THIS device is, set only via Admin
 
 function fetchWithTimeout(url, ms){
   // Plain Promise.race rather than an AbortController signal — some embedded preview/devtools
@@ -655,7 +656,11 @@ function openKioskSwitch(){
     <button class="modal-btn ghost" style="width:100%;margin-top:10px;" onclick="closeModal()">Cancel</button>`;
   openModal(html);
 }
-function selectKiosk(n){ state.currentKiosk = n; closeModal(); renderWho(); renderAdmin(); }
+function selectKiosk(n){
+  state.currentKiosk = n;
+  try{ localStorage.setItem(ACTIVE_KIOSK_KEY, n); }catch(e){}
+  closeModal(); renderWho(); renderAdmin();
+}
 
 function openLogout(){
   const html = `<div class="modal-title">Log out?</div>
@@ -756,8 +761,12 @@ function staffLogin(){
   });
 }
 function completeLogin(name, shop){
+  // Deliberately does NOT touch state.currentKiosk. The active kiosk is a property of this
+  // physical device, set once via Admin — not of whichever staff member is currently signed
+  // in. A staff code can match rows for multiple shops in the sheet (the same person working
+  // at more than one kiosk), so the `shop` the login lookup happens to return is not reliable
+  // signal for "which kiosk is this device."
   state.staffName = name;
-  if(shop) state.currentKiosk = shop;
   state.pin=''; renderPinDots(); setLoginHint('type your code');
   goto('home'); renderWho();
 }
@@ -1351,6 +1360,10 @@ document.addEventListener('scroll', resetIdleTimer, {passive:true, capture:true}
    offline against slightly-stale data), renders, then kicks off a background live refresh —
    same order of operations as the live app. */
 function loadCaches(){
+  try{
+    const savedKiosk = localStorage.getItem(ACTIVE_KIOSK_KEY);
+    if(savedKiosk) state.currentKiosk = savedKiosk;
+  }catch(e){}
   try{
     const raw = localStorage.getItem(CACHE_KEY);
     if(raw){
