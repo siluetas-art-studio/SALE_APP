@@ -26,19 +26,25 @@
   html,body{margin:0;padding:0;background:#131226;color:var(--white);font-family:var(--font-ui);}
   body{
     min-height:100vh;
+    min-height:100dvh;
     display:flex;
-    align-items:flex-start;
+    align-items:stretch;
     justify-content:center;
-    padding:32px 16px;
+    padding:0;
+    background:var(--bg);
   }
   button{font-family:inherit;}
+  /* Real kiosk deployment fills the whole screen edge-to-edge — no phone-mockup frame.
+     Still capped at 480px wide on larger screens (phone-first design, not responsive
+     beyond that), just without the decorative rounded bezel used for in-browser demos. */
   .device{
-    width:390px;
-    max-width:100%;
-    height:844px;
+    width:100%;
+    max-width:480px;
+    height:100vh;
+    height:100dvh;
     background:var(--bg);
-    border-radius:40px;
-    box-shadow:0 30px 80px rgba(0,0,0,.5), 0 0 0 8px #0c0b1a;
+    border-radius:0;
+    box-shadow:none;
     position:relative;
     overflow:hidden;
     display:flex;
@@ -496,9 +502,12 @@ const ORDERS_CACHE_KEY = 'kioskpos_orders_v1';
 const ADMIN_PIN_KEY = 'kioskpos_admin_pin_v1'; // client-side override only — the live backend has no settings-write endpoint
 
 function fetchWithTimeout(url, ms){
-  const controller = new AbortController();
-  const timer = setTimeout(()=>controller.abort(), ms||8000);
-  return fetch(url, {signal: controller.signal}).finally(()=>clearTimeout(timer));
+  // Plain Promise.race rather than an AbortController signal — some embedded preview/devtools
+  // contexts try to relay fetch() calls across a postMessage boundary for logging, and an
+  // AbortSignal can't be structured-cloned, which throws before the request even goes out.
+  // This loses true request cancellation on timeout but keeps the call itself bulletproof.
+  const timeout = new Promise((_, reject)=> setTimeout(()=>reject(new Error('timeout')), ms||8000));
+  return Promise.race([fetch(url), timeout]);
 }
 
 /* ================= DATA =================
@@ -736,6 +745,7 @@ renderPinDots();
 
 /* ================= REGISTER ================= */
 function fmt(n){ return '$'+n; }
+function fmt1(n){ return '$'+(Math.round(n*10)/10).toFixed(1); }
 
 function renderRegister(){
   const r = state.register;
@@ -763,10 +773,10 @@ function renderRegister(){
       const rawItems = (r.category==='braids')
         ? ((sheet.braids && sheet.braids.length) ? sheet.braids : CATALOG.braids.fallbackItems)
         : ((sheet.others && sheet.others.length) ? sheet.others : CATALOG.others.fallbackItems);
-      // Téréré is a braid-menu item in the sheet like any other, but the design shows it in
-      // its own separate collapsible below the main Braid menu — split it out here, not sourced
-      // from a different endpoint.
-      const items = r.category==='braids' ? rawItems.filter(it=>it.name!=='Téréré') : rawItems;
+      // Téréré (in M/L/XL sizes, e.g. "Téréré M") is braid-menu items in the sheet like any
+      // other, but the design shows them in their own separate collapsible below the main
+      // Braid menu — split them out here by name prefix, not sourced from a different endpoint.
+      const items = r.category==='braids' ? rawItems.filter(it=>it.name.indexOf('Téréré')!==0) : rawItems;
       if(items.length){
         items.forEach(it=>{
           html += `<button class="row-card" onclick="addToCart('${it.name}',${Number(it.price)},'${cat.accentVar}')"><span>${it.name}</span><span class="price">${fmt(Number(it.price))}</span></button>`;
@@ -791,10 +801,13 @@ function renderRegister(){
 
   if(r.category==='braids'){
     const braidSource = (sheet.braids && sheet.braids.length) ? sheet.braids : CATALOG.braids.fallbackItems;
-    const tere = braidSource.find(it=>it.name==='Téréré') || { name:'Téréré', price:16 };
+    const tereItems = braidSource.filter(it=>it.name.indexOf('Téréré')===0);
+    const tereList = tereItems.length ? tereItems : [{name:'Téréré', price:16}];
     html += `<button class="pill accent-purple" onclick="toggleSubExpand()">Téréré <span class="arrow">${r.subExpanded?'▼':'▶'}</span></button>`;
     if(r.subExpanded){
-      html += `<button class="row-card" onclick="addToCart('${tere.name}',${Number(tere.price)},'--accent-purple')"><span>${tere.name}</span><span class="price">${fmt(Number(tere.price))}</span></button>`;
+      tereList.forEach(tere=>{
+        html += `<button class="row-card" onclick="addToCart('${tere.name}',${Number(tere.price)},'--accent-purple')"><span>${tere.name}</span><span class="price">${fmt(Number(tere.price))}</span></button>`;
+      });
     }
   }
 
@@ -962,7 +975,7 @@ function confirmPayment(){
   let h12 = now.getHours()%12; if(h12===0) h12=12;
   const timeDisplay = h12+':'+String(now.getMinutes()).padStart(2,'0')+' '+(now.getHours()>=12?'pm':'am');
   ORDERS.unshift({ id:orderId, kioskId: state.currentKiosk, time:timeDisplay, method: selectedMethod, total: total,
-    items: cart.map(c=>({name:c.name, qty:1, price:c.price})) });
+    items: cart.map(c=>({name:c.name, qty:1, price:c.price, category:c.category})) });
   document.getElementById('successTotal').textContent = fmt(total);
   document.getElementById('successMeta').textContent = selectedMethod + ' · ' + cart.length + ' item(s)';
   state.register.cart = [];
@@ -997,7 +1010,12 @@ function renderOrders(){
   }
   renderOrdersList();
 }
-function todaysOrders(){ return (sheet.ordersToday && sheet.ordersToday.length) ? sheet.ordersToday : ORDERS; }
+function todaysOrders(){
+  // The sheet's todayOrders lookup is cross-kiosk; the Orders tab itself should only show this
+  // kiosk's own sales — cross-kiosk totals live in Admin > Kiosks instead.
+  const all = (sheet.ordersToday && sheet.ordersToday.length) ? sheet.ordersToday : ORDERS;
+  return all.filter(o => o.kioskId === state.currentKiosk);
+}
 function parseHour(timeStr){
   if(!timeStr) return null;
   const m = String(timeStr).match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
@@ -1049,17 +1067,18 @@ function setHourFilter(v){
 }
 
 /* ================= REPORTS =================
-   Prefers the sheet's cross-kiosk dailyTotals; falls back to summing today's local orders
-   (this kiosk's session only) if the sheet hasn't returned data yet — same priority as the
-   live app. */
+   Scoped to the active kiosk (see renderReports below for the per-field breakdown of what's
+   truly per-kiosk from the backend vs. cross-kiosk). Falls back to summing today's local
+   orders if the sheet hasn't returned data yet. */
 function localOrdersTotals(){
-  const orders = ORDERS;
+  const orders = ORDERS.filter(o=>o.kioskId === state.currentKiosk);
   let total = 0; const catTotals = {Tattoos:0, Braids:0, Caps:0}; const methodTotals = {};
   orders.forEach(o=>{
     o.items.forEach(it=>{
       total += it.price*it.qty;
-      const key = it.name.indexOf('cap')>=0 || it.name.toLowerCase().indexOf('cap')>=0 ? 'Caps' :
-        (CATALOG.braids.fallbackItems.some(b=>b.name===it.name) || it.name==='Téréré' ? 'Braids' : 'Tattoos');
+      const cat = it.category || (it.name.toLowerCase().indexOf('cap')>=0 ? 'caps' :
+        (it.name.indexOf('Téréré')===0 || CATALOG.braids.fallbackItems.some(b=>b.name===it.name) ? 'braids' : 'tattoos'));
+      const key = cat==='caps' ? 'Caps' : (cat==='braids' ? 'Braids' : 'Tattoos');
       catTotals[key] = (catTotals[key]||0) + it.price*it.qty;
     });
     methodTotals[o.method] = (methodTotals[o.method]||0) + o.total;
@@ -1067,19 +1086,26 @@ function localOrdersTotals(){
   return { total, count: orders.length, catTotals, methodTotals };
 }
 function renderReports(){
+  // Today's Sales is scoped to the ACTIVE kiosk only (cross-kiosk totals live in Admin > Kiosks
+  // instead). Total/count/avg/payment-mix can all be computed per-kiosk from what the backend
+  // returns; category breakdown can't (the sheet's dailyTotals.categoryTotals is a cross-kiosk
+  // aggregate with no per-kiosk split, and today's-orders rows don't carry a category field) —
+  // that one bar chart stays cross-kiosk until the backend exposes it per kiosk.
   const dt = sheet.dailyTotals;
-  const useSheet = !!(dt && dt.grandTotal != null);
+  const kioskOrders = todaysOrders(); // already filtered to state.currentKiosk
   const local = localOrdersTotals();
-  const total = useSheet ? Number(dt.grandTotal) : local.total;
-  const count = useSheet ? Number(dt.count||0) : local.count;
+  const haveKioskTotal = !!(dt && dt.kioskTotals && dt.kioskTotals[state.currentKiosk] != null);
+  const total = haveKioskTotal ? Number(dt.kioskTotals[state.currentKiosk]) : local.total;
+  const count = (sheet.ordersToday && sheet.ordersToday.length) ? kioskOrders.length : local.count;
   const avg = count ? total/count : 0;
   document.getElementById('repTotal').textContent = fmt(total);
   document.getElementById('repOrders').textContent = count;
-  document.getElementById('repAvg').textContent = fmt(avg);
+  document.getElementById('repAvg').textContent = fmt1(avg);
 
+  const useSheetCat = !!(dt && dt.categoryTotals);
   const CAT_KEY_MAP = {tattoos:'Tattoos', braids:'Braids', caps:'Caps'};
   let catTotals = {Tattoos:0, Braids:0, Caps:0};
-  if(useSheet && dt.categoryTotals){
+  if(useSheetCat){
     Object.keys(dt.categoryTotals).forEach(k=>{
       const mapped = CAT_KEY_MAP[String(k).toLowerCase()];
       if(mapped) catTotals[mapped] = Number(dt.categoryTotals[k])||0;
@@ -1092,9 +1118,11 @@ function renderReports(){
     <div class="bar-track"><div class="bar-fill" style="width:${(catTotals[name]/maxCat*100).toFixed(0)}%;background:var(${catAccent[name]});"></div></div></div>
   `).join('');
 
-  let methodTotals = {};
-  if(useSheet && dt.methodTotals){ Object.keys(dt.methodTotals).forEach(m=>{ methodTotals[m] = Number(dt.methodTotals[m]); }); }
-  else { methodTotals = local.methodTotals; }
+  // Payment mix: computed from this kiosk's own orders (either sheet- or locally-sourced,
+  // both already filtered to state.currentKiosk), not from the cross-kiosk dt.methodTotals.
+  const sourceOrders = (sheet.ordersToday && sheet.ordersToday.length) ? kioskOrders : ORDERS.filter(o=>o.kioskId===state.currentKiosk);
+  const methodTotals = {};
+  sourceOrders.forEach(o=>{ methodTotals[o.method] = (methodTotals[o.method]||0) + o.total; });
   const payEntries = PAY_METHODS.filter(m=>methodTotals[m]);
   const maxPay = Math.max(1, ...payEntries.map(m=>methodTotals[m]));
   document.getElementById('repPay').innerHTML = payEntries.map(m=>`
