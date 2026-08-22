@@ -547,9 +547,22 @@ const PAY_METHODS = ['Cash','Card / phone card','Revolut','MB WAY','Other'];
 
 /* ================= LIVE SHEET DATA (populated from cache, refreshed from network) ================= */
 const sheet = {
-  tattoos:null, braids:null, others:null, capPrices:null, capNames:null, staff:null, kiosks:null,
+  tattoos:null, braids:null, others:null, terere:null, capPrices:null, capNames:null, staff:null, kiosks:null,
   cacheUpdatedAt:null, dailyTotals:null, ordersToday:null,
 };
+/* The sheet has a dedicated Terere column (M/L/XL) separate from the Braid column — the Apps
+   Script's ?lookup=all response should expose that as its own field. The exact key name isn't
+   confirmed, so this checks a few likely spellings; whichever one the backend actually uses,
+   this picks it up automatically. */
+function extractTerereList(data){
+  const candidates = [data.terere, data.tereres, data.tereré, data.Terere];
+  for(const c of candidates){ if(Array.isArray(c) && c.length) return c; }
+  return [];
+}
+function isTerereItem(name){
+  const norm = String(name).toLowerCase().replace(/[éèêë]/g, 'e');
+  return norm.indexOf('terere') === 0;
+}
 /* Kiosk identifiers come back from the sheet as e.g. "ALFA1" (no space) — that's the canonical
    value used for API matching (staffShop, dailyTotals.kioskTotals keys). These just format that
    canonical value for display, matching the reference design ("Alfa 1" / "ALFA 1"). */
@@ -780,10 +793,11 @@ function renderRegister(){
       const rawItems = (r.category==='braids')
         ? ((sheet.braids && sheet.braids.length) ? sheet.braids : CATALOG.braids.fallbackItems)
         : ((sheet.others && sheet.others.length) ? sheet.others : CATALOG.others.fallbackItems);
-      // Téréré (in M/L/XL sizes, e.g. "Téréré M") is braid-menu items in the sheet like any
-      // other, but the design shows them in their own separate collapsible below the main
-      // Braid menu — split them out here by name prefix, not sourced from a different endpoint.
-      const items = r.category==='braids' ? rawItems.filter(it=>it.name.indexOf('Téréré')!==0) : rawItems;
+      // Terere (M/L/XL) has its own sheet column now — sourced from sheet.terere below. This
+      // filter is just a safety net in case any Terere-named row still shows up mixed into the
+      // braids list (e.g. from an older backend shape); isTerereItem() matches regardless of
+      // accent/casing ("Téréré", "terere", "TERERE M", ...).
+      const items = r.category==='braids' ? rawItems.filter(it=>!isTerereItem(it.name)) : rawItems;
       if(items.length){
         items.forEach(it=>{
           html += `<button class="row-card" onclick="addToCart('${it.name}',${Number(it.price)},'${cat.accentVar}')"><span>${it.name}</span><span class="price">${fmt(Number(it.price))}</span></button>`;
@@ -807,9 +821,14 @@ function renderRegister(){
   }
 
   if(r.category==='braids'){
-    const braidSource = (sheet.braids && sheet.braids.length) ? sheet.braids : CATALOG.braids.fallbackItems;
-    const tereItems = braidSource.filter(it=>it.name.indexOf('Téréré')===0);
-    const tereList = tereItems.length ? tereItems : [{name:'Téréré', price:16}];
+    // Prefer the sheet's dedicated Terere column; fall back to picking Terere-named rows out
+    // of the braids list (older backend shape), then a hardcoded default as a last resort.
+    let tereList = (sheet.terere && sheet.terere.length) ? sheet.terere : null;
+    if(!tereList){
+      const braidSource = (sheet.braids && sheet.braids.length) ? sheet.braids : CATALOG.braids.fallbackItems;
+      const tereItems = braidSource.filter(it=>isTerereItem(it.name));
+      tereList = tereItems.length ? tereItems : [{name:'Téréré', price:16}];
+    }
     html += `<button class="pill accent-purple" onclick="toggleSubExpand()">Téréré <span class="arrow">${r.subExpanded?'▼':'▶'}</span></button>`;
     if(r.subExpanded){
       tereList.forEach(tere=>{
@@ -1084,7 +1103,7 @@ function localOrdersTotals(){
     o.items.forEach(it=>{
       total += it.price*it.qty;
       const cat = it.category || (it.name.toLowerCase().indexOf('cap')>=0 ? 'caps' :
-        (it.name.indexOf('Téréré')===0 || CATALOG.braids.fallbackItems.some(b=>b.name===it.name) ? 'braids' : 'tattoos'));
+        (isTerereItem(it.name) || CATALOG.braids.fallbackItems.some(b=>b.name===it.name) ? 'braids' : 'tattoos'));
       const key = cat==='caps' ? 'Caps' : (cat==='braids' ? 'Braids' : 'Tattoos');
       catTotals[key] = (catTotals[key]||0) + it.price*it.qty;
     });
@@ -1253,11 +1272,12 @@ function refreshSheetData(manual){
       tattoos: data.tattoos || [], braids: data.braids || [], staff: data.staff || [],
       kiosks: data.kiosks || [], capPrices: data.capPrices || CATALOG.caps.fallbackPrices,
       capNames: data.capNames || CATALOG.caps.fallbackNames, others: data.others || [],
+      terere: extractTerereList(data),
       updatedAt: Date.now(),
     };
     try{ localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); }catch(e){}
     Object.assign(sheet, { tattoos:cache.tattoos, braids:cache.braids, staff:cache.staff, kiosks:cache.kiosks,
-      capPrices:cache.capPrices, capNames:cache.capNames, others:cache.others, cacheUpdatedAt:cache.updatedAt });
+      capPrices:cache.capPrices, capNames:cache.capNames, others:cache.others, terere:cache.terere, cacheUpdatedAt:cache.updatedAt });
     state.settings.lastSynced = new Date(cache.updatedAt);
     state.settings.refreshBusy = false;
     if(manual) state.settings.refreshMsg = 'Data refreshed';
@@ -1337,8 +1357,8 @@ function loadCaches(){
       const cache = JSON.parse(raw);
       Object.assign(sheet, {
         tattoos: cache.tattoos||null, braids: cache.braids||null, others: cache.others||null,
-        capPrices: cache.capPrices||null, capNames: cache.capNames||null, staff: cache.staff||null,
-        kiosks: cache.kiosks||null, cacheUpdatedAt: cache.updatedAt||null,
+        terere: cache.terere||null, capPrices: cache.capPrices||null, capNames: cache.capNames||null,
+        staff: cache.staff||null, kiosks: cache.kiosks||null, cacheUpdatedAt: cache.updatedAt||null,
       });
     }
     const rawOrders = localStorage.getItem(ORDERS_CACHE_KEY);
