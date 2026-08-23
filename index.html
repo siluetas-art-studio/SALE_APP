@@ -629,13 +629,21 @@ const ADMIN_PIN_KEY = 'kioskpos_admin_pin_v1'; // client-side override only — 
 const ACTIVE_KIOSK_KEY = 'kioskpos_active_kiosk_v1'; // persists which kiosk THIS device is, set only via Admin
 const DESIGN_KEY = 'kioskpos_design_v1'; // persists Admin > Design tab: item style (border/fill) + custom color vars
 
+/* Every GET to the sheet is read-freshness-sensitive (staff editing rows, then expecting the
+   kiosk to reflect it), but a plain fetch() to the exact same Apps Script URL is exactly the
+   shape browsers (and sometimes an intermediate proxy) cache — so a deleted/edited sheet row
+   can silently keep showing the old response. bustUrl() appends a one-time timestamp so the
+   URL is never identical twice, and {cache:'no-store'} tells the browser not to use its own
+   HTTP cache for the request even if the server response doesn't set no-cache headers itself
+   (Apps Script Web Apps don't reliably control their own caching headers). */
+function bustUrl(url){ return url + (url.includes('?') ? '&' : '?') + '_ts=' + Date.now(); }
 function fetchWithTimeout(url, ms){
   // Plain Promise.race rather than an AbortController signal — some embedded preview/devtools
   // contexts try to relay fetch() calls across a postMessage boundary for logging, and an
   // AbortSignal can't be structured-cloned, which throws before the request even goes out.
   // This loses true request cancellation on timeout but keeps the call itself bulletproof.
   const timeout = new Promise((_, reject)=> setTimeout(()=>reject(new Error('timeout')), ms||8000));
-  return Promise.race([fetch(url), timeout]);
+  return Promise.race([fetch(bustUrl(url), {cache:'no-store'}), timeout]);
 }
 
 /* ================= DATA =================
@@ -925,7 +933,7 @@ function staffLogin(){
   }
   state.loginBusy = true;
   setLoginHint('Checking…');
-  fetch(CONFIG.SHEET_URL + '?staffCode=' + encodeURIComponent(code)).then(r=>r.json()).then(data=>{
+  fetch(bustUrl(CONFIG.SHEET_URL + '?staffCode=' + encodeURIComponent(code)), {cache:'no-store'}).then(r=>r.json()).then(data=>{
     state.loginBusy = false;
     if(data.found && String(data.active).toUpperCase()==='Y'){ completeLogin(data.name, data.shop); }
     else { state.pin=''; renderPinDots(); setLoginHint('Code not found or inactive'); }
@@ -1054,7 +1062,7 @@ function lookupPreview(){
   if(cached){ r.preview = {found:true, name:cached.name, price:Number(cached.price)}; r.previewLoading=false; renderRegister(); return; }
   r.previewLoading = true;
   renderRegister();
-  fetch(CONFIG.SHEET_URL + '?number=' + n).then(res=>res.json()).then(data=>{
+  fetch(bustUrl(CONFIG.SHEET_URL + '?number=' + n), {cache:'no-store'}).then(res=>res.json()).then(data=>{
     if(state.register.keypad !== raw) return; // stale response, input changed since
     state.register.previewLoading = false;
     state.register.preview = data.found ? {found:true, name:data.name, price:Number(data.price)} : {found:false};
@@ -1101,7 +1109,7 @@ function tattooEnter(){
   if(cached){ addToCart(`#${raw} | ${cached.name}`, Number(cached.price), CATALOG.tattoos.accentVar); r.keypad=''; r.preview=null; return; }
   r.tattooLoading = true;
   renderRegister();
-  fetch(CONFIG.SHEET_URL + '?number=' + n).then(res=>res.json()).then(data=>{
+  fetch(bustUrl(CONFIG.SHEET_URL + '?number=' + n), {cache:'no-store'}).then(res=>res.json()).then(data=>{
     r.tattooLoading = false;
     if(data.found){ addToCart(`#${raw} | ${data.name}`, Number(data.price), CATALOG.tattoos.accentVar); r.keypad=''; r.preview=null; }
     else if(isPreviewHost()){ addSampleTattoo(raw); }
@@ -1145,7 +1153,7 @@ function selectCapType(type){
   renderRegister();
   const sheetName = type==='custom' ? 'custom cap' : 'regular cap';
   const fallback = CATALOG.caps.fallbackPrices[type];
-  fetch(CONFIG.SHEET_URL + '?lookup=cap&name=' + encodeURIComponent(sheetName)).then(res=>res.json()).then(data=>{
+  fetch(bustUrl(CONFIG.SHEET_URL + '?lookup=cap&name=' + encodeURIComponent(sheetName)), {cache:'no-store'}).then(res=>res.json()).then(data=>{
     r.capPrice = data.found ? Number(data.price) : fallback;
     r.capPriceLoading = false;
     renderRegister();
@@ -1596,7 +1604,7 @@ function showUpdatingBadge(on){
 /* Full catalog/staff/kiosk refresh — mirrors the live app's ?lookup=all + localStorage cache. */
 function refreshSheetData(manual){
   if(manual){ state.settings.refreshBusy = true; state.settings.refreshMsg=''; renderAdmin(); showUpdatingBadge(true); }
-  fetch(CONFIG.SHEET_URL + '?lookup=all').then(res=>res.json()).then(data=>{
+  fetch(bustUrl(CONFIG.SHEET_URL + '?lookup=all'), {cache:'no-store'}).then(res=>res.json()).then(data=>{
     const cache = {
       tattoos: data.tattoos || [], braids: data.braids || [], staff: data.staff || [],
       kiosks: data.kiosks || [], capPrices: data.capPrices || CATALOG.caps.fallbackPrices,
