@@ -41,9 +41,10 @@
     background:var(--bg);
   }
   button{font-family:inherit;}
-  /* Real kiosk deployment fills the whole screen edge-to-edge — no phone-mockup frame.
-     Still capped at 480px wide on larger screens (phone-first design, not responsive
-     beyond that), just without the decorative rounded bezel used for in-browser demos. */
+  /* REAL DEPLOYMENT ONLY: fills the whole physical kiosk screen edge-to-edge, no
+     phone-mockup frame. Still capped at 480px wide (phone-first design, not
+     responsive beyond that), just without the decorative rounded bezel used for the
+     in-browser preview build (app.html / Cowork Artifact). */
   .device{
     width:100%;
     max-width:480px;
@@ -123,16 +124,24 @@
   }
   .row-card .price{font-weight:700;}
 
+  /* Same border/fill accent pattern as .cart-item on the register screen (see below) — the
+     payment page's order list should read as the same product colors, not a flat row. */
   .pay-item-row{
-    background:var(--card);
     border-radius:var(--radius);
     height:50px;
     padding:0 18px;
     display:flex;align-items:center;justify-content:space-between;
     margin-bottom:6px;
-    color:var(--accent-orange);width:100%;font-size:16px;text-align:left;
+    width:100%;font-size:16px;text-align:left;
+    border:2px solid var(--item-accent, var(--white));
+    background:transparent;
+    color:var(--white);
   }
-  .pay-item-row .price{font-weight:700;color:var(--accent-orange);}
+  #app.style-fill .pay-item-row{
+    border-color:transparent;
+    background:color-mix(in srgb, var(--item-accent, var(--white)) 45%, var(--card));
+  }
+  .pay-item-row .price{font-weight:700;color:var(--white);}
 
   .section-label{font-size:13px;color:var(--text-faint);margin:14px 0 8px;font-style:italic;}
 
@@ -180,13 +189,24 @@
   .home-btn-fixed{margin-top:6px;}
 
   /* ---------- login ---------- */
-  #screen-login{align-items:center;text-align:center;padding-top:184px;}
+  #screen-login{align-items:center;text-align:center;padding-top:110px;}
   .wordmark-pink{font-family:var(--font-title);font-size:50px;color:var(--accent-pink);margin:0;line-height:1;}
-  .wordmark-white{font-family:var(--font-title);font-size:44px;color:var(--white);margin:8px 0 0;line-height:1;}
-  .pin-dots{display:flex;gap:20px;margin:56px 0 18px;}
+  /* The logo PNG already contains BOTH the "Siluetas" script mark and the "Art Studio"
+     line below it (a single flattened two-line lockup) — there is no separate text element
+     for "Art Studio" any more; sizing this taller reveals both lines at once. */
+  .wordmark-logo{height:147px;width:auto;display:block;margin:0 auto;}
+  .pin-dots{display:flex;gap:20px;margin:82px 0 18px;}
   .pin-dot{width:45px;height:45px;border-radius:50%;border:3px solid var(--white);display:flex;align-items:center;justify-content:center;color:var(--white);font-size:24px;font-weight:700;line-height:1;}
   .pin-dot .star{display:block;font-size:34px;line-height:1;transform:translateY(7px);}
-  .pin-hint{font-family:var(--font-ui);font-style:italic;color:var(--text-soft);font-size:16px;margin-bottom:36px;}
+  .pin-hint{font-family:var(--font-ui);font-style:italic;color:var(--text-soft);font-size:16px;margin-bottom:20px;}
+  /* Only ever shown on a non-production host with no cached staff data (see isPreviewHost()
+     in the script) — lets the design get click-tested here without a real backend connection. */
+  .demo-login-link{
+    background:none;border:1px solid var(--text-faint);color:var(--text-soft);
+    font-family:var(--font-ui);font-size:12px;padding:8px 14px;border-radius:20px;
+    cursor:pointer;margin:-24px auto 24px;display:block;
+  }
+  .demo-login-link:hover{color:var(--white);border-color:var(--text-soft);}
   .keypad-round{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;width:100%;max-width:210px;}
   .key-round{
     aspect-ratio:1;border-radius:50%;background:var(--card);
@@ -194,6 +214,12 @@
     display:flex;align-items:center;justify-content:center;cursor:pointer;
   }
   .key-round:active{background:var(--card-dark);}
+  /* Login screen's keypad only — sized larger for real-device comfort (measured from a phone
+     screenshot: 70px keys, 33px column gap, 12px row gap). The admin-PIN modal reuses the same
+     .keypad-round/.key-round classes at their smaller default size, since that keypad sits inside
+     a fixed-width modal box and doesn't have room for the bigger login version. */
+  #screen-login .keypad-round{grid-template-columns:repeat(3,70px);column-gap:33px;row-gap:12px;width:auto;max-width:none;}
+  #screen-login .key-round{font-size:22px;}
   .key-round.ghost{background:transparent;cursor:default;}
 
   /* ---------- home grid ---------- */
@@ -207,11 +233,25 @@
     background:var(--card-dark);border:5px solid transparent;cursor:pointer;
     font-family:var(--font-title);font-size:22px;color:var(--white);
   }
+  /* Entrance animation, replayed every time the Home screen becomes active (see
+     playHomeEntrance()): the 4 category tiles fade + drop in from above AS ONE BLOCK (no
+     stagger within the group), the 4 admin-row icon tiles fade + rise in from below as their
+     own block. Admin > Settings can turn this off entirely (.no-anim). */
+  @keyframes tileDescend{from{opacity:0;transform:translateY(-30px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes tileRise{from{opacity:0;transform:translateY(30px);}to{opacity:1;transform:translateY(0);}}
+  #screen-home .grid .tile{opacity:0;}
+  #screen-home .grid .tile.enter-down{animation:tileDescend .5s cubic-bezier(.2,.8,.2,1) forwards;}
+  #screen-home .grid .tile.enter-up{animation:tileRise .5s cubic-bezier(.2,.8,.2,1) forwards;}
+  #screen-home .grid .tile.no-anim{opacity:1;animation:none;transform:none;}
+  @media (prefers-reduced-motion: reduce){
+    #screen-home .grid .tile{opacity:1!important;animation:none!important;transform:none!important;}
+  }
   .tile.outline-white{background:transparent;border-color:var(--white);}
+  .tile.outline-green{background:transparent;border-color:var(--accent-green);color:var(--accent-green);}
   .tile.outline-pink{background:transparent;border-color:var(--accent-pink);color:var(--accent-pink);}
   .tile.outline-orange{background:transparent;border-color:var(--accent-orange);color:var(--accent-orange);}
   .tile.outline-purple{background:transparent;border-color:var(--accent-purple);}
-  .tile svg{width:34px;height:34px;}
+  .tile svg{width:58px;height:58px;}
   .tile.icon-orange svg{stroke:var(--accent-orange);}
   .tile.icon-white svg{stroke:var(--white);}
 
@@ -220,7 +260,7 @@
   .keypad-grid{background:var(--card);border-radius:var(--radius);padding:6px;margin-bottom:18px;}
   .keypad-grid .grid3{display:grid;grid-template-columns:repeat(3,1fr);}
   .keypad-grid .k{
-    padding:20px 0;text-align:center;font-size:19px;font-weight:600;color:var(--white);
+    padding:20px 0;text-align:center;font-size:28px;font-weight:600;color:var(--white);
     border:none;background:transparent;cursor:pointer;position:relative;
   }
   .keypad-grid .k::after{content:"";position:absolute;right:0;top:15%;bottom:15%;width:1px;background:rgba(255,255,255,.15);}
@@ -242,7 +282,20 @@
   .order-row .head{display:flex;justify-content:space-between;font-size:15px;}
   .order-row.expanded{background:var(--card-mid);}
   .order-row.expanded .head{color:var(--accent-orange);font-style:italic;}
-  .order-sub{display:flex;justify-content:space-between;font-size:14px;color:var(--text-soft);padding:8px 4px 0;}
+  /* Same border/fill accent pattern as .cart-item / .pay-item-row — an expanded order should
+     read as the same per-product colors as the register's Current Order list, one row per
+     item instead of a flat text line. */
+  .order-sub{
+    display:flex;justify-content:space-between;font-size:14px;
+    border-radius:var(--radius);min-height:44px;align-items:center;
+    padding:0 16px;margin-top:8px;
+    border:2px solid var(--item-accent, var(--white));
+    background:transparent;color:var(--white);
+  }
+  #app.style-fill .order-sub{
+    border-color:transparent;
+    background:color-mix(in srgb, var(--item-accent, var(--white)) 45%, var(--card));
+  }
   .search-input{width:100%;height:45px;background:var(--accent-lavender);border:none;border-radius:var(--radius);padding:0 22px;color:#241a3a;font-family:var(--font-ui);font-style:italic;font-size:15px;text-align:center;margin-bottom:14px;}
   .search-input::placeholder{color:#3d2f5c;}
 
@@ -257,6 +310,14 @@
   .bar-row .lbl{display:flex;justify-content:space-between;font-size:15px;margin-bottom:6px;}
   .bar-track{height:12px;border-radius:var(--radius);background:var(--card-dark);overflow:hidden;}
   .bar-fill{height:100%;border-radius:var(--radius);}
+
+  /* ---------- sale details ---------- */
+  .sd-title{font-family:var(--font-title);font-size:24px;color:var(--white);margin:6px 0 22px;line-height:1.3;}
+  .detail-row{min-height:52px;margin-bottom:8px;padding:0 18px;}
+  .detail-row .lbl{font-style:italic;font-size:20px;}
+  .detail-row .price{font-weight:400;font-size:20px;}
+  .detail-row.total{min-height:64px;margin-top:18px;}
+  .detail-row.total .lbl, .detail-row.total .price{font-style:normal;font-weight:700;font-size:22px;}
 
   /* ---------- admin ---------- */
   .tabbar{background:var(--card-dark);border-radius:var(--radius);height:60px;padding:0 12px;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;font-family:var(--font-title);font-size:18px;color:var(--accent-orange);}
@@ -292,17 +353,41 @@
   .amount-due{text-align:center;margin:20px 0 26px;}
   .amount-due .lbl{color:var(--text-faint);font-size:14px;}
   .amount-due .num{font-size:44px;font-weight:800;font-family:'Courier New',monospace;}
-  .check-circle{width:90px;height:90px;border-radius:50%;border:4px solid var(--accent-green);display:flex;align-items:center;justify-content:center;margin:24px auto 18px;}
-  .check-circle svg{width:44px;height:44px;stroke:var(--accent-green);}
+  /* The ring and check mark are drawn with stroke-dasharray/dashoffset (dasharray set to each
+     shape's own path length, dashoffset animated from that length down to 0) rather than the
+     old plain CSS-border circle, so the ring can trace itself in before the check mark draws —
+     replayed on every sale via playSuccessCheckAnimation()/.animate, not just once. */
+  .check-circle{width:90px;height:90px;margin:24px auto 18px;}
+  .check-circle svg{width:100%;height:100%;overflow:visible;}
+  .check-circle-ring{stroke:var(--accent-green);fill:none;stroke-dasharray:264;stroke-dashoffset:264;}
+  .check-circle-tick{stroke:var(--accent-green);fill:none;stroke-dasharray:60;stroke-dashoffset:60;}
+  .check-circle.animate .check-circle-ring{animation:drawRing .5s ease-out forwards;}
+  .check-circle.animate .check-circle-tick{animation:drawTick .35s ease-out .45s forwards;}
+  @keyframes drawRing{to{stroke-dashoffset:0;}}
+  @keyframes drawTick{to{stroke-dashoffset:0;}}
+  @media (prefers-reduced-motion: reduce){
+    .check-circle-ring, .check-circle-tick{animation:none!important;stroke-dashoffset:0!important;}
+  }
+  @keyframes cheerRise{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:translateY(0);}}
+  .success-cheer{font-family:var(--font-title);font-size:28px;color:var(--white);margin:40px 0 0;opacity:0;}
+  .success-cheer.animate{animation:cheerRise .45s ease-out .75s forwards;}
+  @media (prefers-reduced-motion: reduce){
+    .success-cheer{animation:none!important;opacity:1!important;transform:none!important;}
+  }
   #screen-success{align-items:center;text-align:center;padding-left:16px;padding-right:16px;padding-top:156px;}
   .empty-hint{color:var(--text-faint);font-style:italic;text-align:center;margin-top:40px;font-size:14px;}
   .pill.newsale{background:var(--accent-green);color:var(--accent-blue);justify-content:center;height:70px;width:358px;max-width:100%;}
 
   /* ---------- modal (kiosk switch / logout / admin gate) ---------- */
-  .modal-overlay{position:absolute;inset:0;background:rgba(10,9,30,.6);display:none;align-items:center;justify-content:center;z-index:50;border-radius:40px;}
+  /* No border-radius here on purpose: .device already clips with overflow:hidden at whatever
+     radius IT has (rounded in the app.html/Artifact phone-frame preview, square in the real
+     index.html deployment) — inheriting that clip keeps this overlay always matching its own
+     device instead of carrying a hardcoded radius that used to show as stray rounded corners
+     on the real (square) kiosk screen. */
+  .modal-overlay{position:absolute;inset:0;background:rgba(10,9,30,.6);display:none;align-items:center;justify-content:center;z-index:50;}
   .modal-overlay.active{display:flex;}
-  .modal-box{background:var(--card-dark);border-radius:var(--radius);padding:24px;width:280px;max-width:82%;}
-  .modal-title{font-family:var(--font-title);font-size:20px;margin:0 0 16px;text-align:center;color:var(--white);}
+  .modal-box{background:var(--card-dark);border-radius:var(--radius);padding:28px;width:330px;max-width:90%;}
+  .modal-title{font-family:var(--font-title);font-size:24px;margin:0 0 16px;text-align:center;color:var(--white);}
   .modal-actions{display:flex;gap:10px;margin-top:16px;}
   .modal-btn{flex:1;border:none;border-radius:var(--radius);padding:14px 0;font-family:var(--font-ui);font-weight:600;cursor:pointer;font-size:14px;}
   .modal-btn.primary{background:var(--accent-orange);color:#241a08;}
@@ -310,11 +395,11 @@
   .kiosk-pick{display:flex;flex-direction:column;gap:8px;margin-bottom:6px;}
   .kiosk-pick button{background:var(--card);border:2px solid transparent;border-radius:var(--radius);padding:14px;color:var(--white);font-family:var(--font-ui);font-weight:600;cursor:pointer;text-align:left;font-size:14px;}
   .kiosk-pick button.sel{border-color:var(--accent-orange);}
-  .pin-modal-dots{display:flex;gap:14px;justify-content:center;margin:14px 0 18px;}
-  .pin-modal-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--white);}
+  .pin-modal-dots{display:flex;gap:18px;justify-content:center;margin:14px 0 20px;}
+  .pin-modal-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--white);}
   .pin-modal-dot.filled{background:var(--white);}
-  .modal-box .keypad-round{margin:0 auto;}
-  .modal-box .key-round{font-size:18px;}
+  .modal-box .keypad-round{margin:0 auto;max-width:264px;gap:18px;}
+  .modal-box .key-round{font-size:24px;}
   .modal-err{color:var(--accent-pink);font-size:12px;text-align:center;margin:-8px 0 10px;min-height:14px;}
 
   .settings-slider{width:100%;accent-color:var(--accent-orange);height:6px;}
@@ -330,10 +415,10 @@
 
   <!-- LOGIN -->
   <section class="screen active" id="screen-login">
-    <p class="wordmark-pink">Siluetas</p>
-    <p class="wordmark-white">Art Studio</p>
+    <img class="wordmark-logo" src="data:image/png;base64,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" alt="Siluetas">
     <div class="pin-dots" id="pinDots"></div>
     <p class="pin-hint" id="loginHint">type your code</p>
+    <button class="demo-login-link" id="demoLoginBtn" style="display:none;" onclick="demoLogin()">Continue in demo mode (preview only, no live data)</button>
     <div class="keypad-round">
       <button class="key-round" onclick="pinPress('1')">1</button>
       <button class="key-round" onclick="pinPress('2')">2</button>
@@ -357,21 +442,21 @@
       <div class="who"><div class="kiosk">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
     </div>
     <div class="grid">
-      <button class="tile outline-white" onclick="openRegister('tattoos')">Tattoos</button>
+      <button class="tile outline-green" onclick="openRegister('tattoos')">Tattoos</button>
       <button class="tile outline-pink" onclick="openRegister('braids')">Braids</button>
       <button class="tile outline-orange" onclick="openRegister('caps')">Caps</button>
       <button class="tile outline-white" onclick="openRegister('others')">Others</button>
-      <button class="tile outline-purple" onclick="openAdminGate('kiosks')" title="Kiosks">
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="2"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>
+      <button class="tile icon-white" onclick="goto('orders')" title="Order History">
+        <svg viewBox="0 0 24 24" fill="none"><rect x="6" y="4.5" width="12" height="4.5" rx="2.25" fill="var(--white)"/><path d="M10.3 6.2l1.7 1.7 1.7-1.7" stroke="var(--card-dark)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><rect x="6" y="11" width="3" height="3" rx="1" fill="var(--white)"/><rect x="10.5" y="11.5" width="7.5" height="2" rx="1" fill="var(--white)"/><rect x="6" y="16.5" width="3" height="3" rx="1" fill="var(--white)"/><rect x="10.5" y="17" width="7.5" height="2" rx="1" fill="var(--white)"/></svg>
       </button>
-      <button class="tile icon-white" onclick="goto('orders')" title="Orders">
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--white)" stroke-width="2"><path d="M8 6h11M8 12h11M8 18h11M4 6h.01M4 12h.01M4 18h.01" stroke-linecap="round"/></svg>
+      <button class="tile icon-white" onclick="goto('reports')" title="Today's Sales">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5.5 3.5a1.5 1.5 0 0 1 1.5-1.5h4a1.5 1.5 0 0 1 1.5 1.5V4h.2A1.3 1.3 0 0 1 14 5.3v6.4a1.3 1.3 0 0 1-1.3 1.3H6.3A1.3 1.3 0 0 1 5 11.7V5.3A1.3 1.3 0 0 1 6.3 4h.2v-.5z" fill="var(--white)"/><rect x="8" y="2.6" width="3" height="2.1" rx="0.55" fill="var(--white)"/><path d="M6.7 7.6l1 1 1.8-1.8M6.7 10.6l1 1 1.8-1.8" stroke="var(--card-dark)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="16.5" r="5" fill="var(--white)"/><path d="M16 13.3v1M16 19.7v1M14.1 17.9c.1.9 1 1.4 1.9 1.4s1.8-.5 1.8-1.4c0-.8-.7-1.2-1.8-1.5-1.2-.3-1.9-.6-1.9-1.4 0-.8.8-1.3 1.8-1.3s1.7.5 1.8 1.3" stroke="var(--card-dark)" stroke-width="1.1" stroke-linecap="round" fill="none"/></svg>
       </button>
-      <button class="tile icon-orange" onclick="goto('reports')" title="Reports">
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="2"><path d="M7 3h8l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M9 13l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <button class="tile icon-orange" onclick="goto('saledetail')" title="Sale Details">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="10.5" r="7" fill="var(--accent-orange)"/><path d="M10.5 6.7v1M10.5 14.3v1M8.2 12c.1 1 1.1 1.6 2.2 1.6s2-.6 2-1.6c0-.9-.8-1.4-2-1.7-1.4-.3-2.2-.7-2.2-1.6 0-.9.9-1.5 2.1-1.5s2 .6 2.1 1.5" stroke="var(--card-dark)" stroke-width="1.3" stroke-linecap="round" fill="none"/><path d="M15.3 15.3l4.7 4.7" stroke="var(--accent-orange)" stroke-width="2.6" stroke-linecap="round"/></svg>
       </button>
-      <button class="tile icon-orange" onclick="openAdminGate('settings')" title="Settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4.7a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.3a7 7 0 0 0-2 1.2l-2.4-.7-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-.7a7 7 0 0 0 2 1.2L10 21h4l.5-2.3a7 7 0 0 0 2-1.2l2.4.7 2-3.4-2-1.6c.07-.4.1-.8.1-1.2z"/></svg>
+      <button class="tile icon-orange" onclick="openAdminGate('global')" title="Admin">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3.8c.9 0 1.6.6 1.9 1.4l.2.7c.4.1.7.3 1 .5l.7-.3c.9-.3 1.8 0 2.3.8l.5.8c.5.8.3 1.7-.3 2.4l-.5.5c0 .3.1.6.1.9s0 .6-.1.9l.5.5c.6.7.8 1.6.3 2.4l-.5.8c-.5.8-1.4 1.1-2.3.8l-.7-.3c-.3.2-.6.4-1 .5l-.2.7c-.3.8-1 1.4-1.9 1.4h-.9c-.9 0-1.6-.6-1.9-1.4l-.2-.7a4 4 0 0 1-1-.5l-.7.3c-.9.3-1.8 0-2.3-.8l-.5-.8c-.5-.8-.3-1.7.3-2.4l.5-.5a4 4 0 0 1-.1-.9c0-.3 0-.6.1-.9l-.5-.5c-.6-.7-.8-1.6-.3-2.4l.5-.8c.5-.8 1.4-1.1 2.3-.8l.7.3c.3-.2.6-.4 1-.5l.2-.7c.3-.8 1-1.4 1.9-1.4h.9z" fill="var(--accent-orange)"/><circle cx="12" cy="12" r="2.6" fill="var(--card-dark)"/></svg>
       </button>
     </div>
   </section>
@@ -423,6 +508,22 @@
     <div id="repPay"></div>
   </section>
 
+  <!-- SALE DETAILS -->
+  <section class="screen pb-bar" id="screen-saledetail">
+    <div class="topbar">
+      <button class="icon-btn" onclick="goto('home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>
+      </button>
+      <div class="who"><div class="kiosk">Alfa 1</div><div class="staff" onclick="openLogout()">Joana M</div></div>
+    </div>
+    <div class="sd-title" id="sdTitle">Alfa 1 &nbsp;--:-- &nbsp;|&nbsp; --</div>
+    <div class="section-label">Category</div>
+    <div id="sdCats"></div>
+    <div class="section-label">Payment</div>
+    <div id="sdPay"></div>
+    <div id="sdTotal"></div>
+  </section>
+
   <!-- ADMIN -->
   <section class="screen pb-bar" id="screen-admin">
     <div class="topbar">
@@ -460,11 +561,17 @@
 
   <!-- SUCCESS -->
   <section class="screen" id="screen-success">
-    <div class="check-circle"><svg viewBox="0 0 24 24" fill="none" stroke-width="3"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="check-circle animate" id="successCheck">
+      <svg viewBox="0 0 100 100" fill="none">
+        <circle class="check-circle-ring" cx="50" cy="50" r="42" stroke-width="6"/>
+        <path class="check-circle-tick" d="M30 52l14 14 26-30" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
     <p style="font-family:var(--font-title);font-size:26px;margin:0 0 6px;">Sale complete</p>
     <p style="color:var(--text-faint);font-size:14px;margin:0 0 20px;" id="successMeta"></p>
     <div class="amount-due" style="margin:0 0 20px;"><div class="num" id="successTotal">$0</div></div>
     <button class="pill newsale" onclick="goto('home')">New sale</button>
+    <p class="success-cheer" id="successCheer"></p>
   </section>
 
   <!-- UPDATING INDICATOR (transient, shown during a sheet refresh if enabled in Settings) -->
@@ -502,12 +609,25 @@ const CONFIG = {
   SHEET_URL: 'https://script.google.com/macros/s/AKfycbzGmke5XQi0EG_t07fpxmUL2rSGe3kkbXmGljqLVzfXI0OoAMpiAIB_iMokqq7Ijlx2/exec',
   adminPin: '9999',
   idleTimeoutSeconds: 45,
+  sampleTattooPrice: 20,
 };
+/* Staff cheer message on the Sale Complete screen — picks the tier whose threshold is the
+   highest one at-or-below the sale total, so there's always a match with no gaps. "{name}" is
+   replaced with the staff member's first name. Editable from Admin > Settings. */
+const SALE_MESSAGE_DEFAULTS = [
+  { threshold:0,  text:'Good job {name}!' },
+  { threshold:40, text:'Very nice {name}!' },
+  { threshold:50, text:'OMGGG {name}!' },
+  { threshold:60, text:'You are the best {name}!' },
+];
 const CACHE_KEY = 'kioskpos_cache_v1';
 const DAILY_CACHE_KEY = 'kioskpos_daily_v1';
 const ORDERS_CACHE_KEY = 'kioskpos_orders_v1';
+const SALE_MSG_KEY = 'kioskpos_sale_messages_v1';
+const HOME_ANIM_KEY = 'kioskpos_home_anim_v1';
 const ADMIN_PIN_KEY = 'kioskpos_admin_pin_v1'; // client-side override only — the live backend has no settings-write endpoint
 const ACTIVE_KIOSK_KEY = 'kioskpos_active_kiosk_v1'; // persists which kiosk THIS device is, set only via Admin
+const DESIGN_KEY = 'kioskpos_design_v1'; // persists Admin > Design tab: item style (border/fill) + custom color vars
 
 function fetchWithTimeout(url, ms){
   // Plain Promise.race rather than an AbortController signal — some embedded preview/devtools
@@ -524,7 +644,7 @@ function fetchWithTimeout(url, ms){
    unreachable and nothing is cached yet — same role as the TATTOOS/BRAIDS arrays in the
    original app. */
 const CATALOG = {
-  tattoos: { label:'Tattoos', accentVar:'--white', type:'keypad',
+  tattoos: { label:'Tattoos', accentVar:'--accent-green', type:'keypad',
     fallback:{
       '54':{name:'Lion',price:12}, '65':{name:'Chinese letter',price:12}, '12':{name:'Skull',price:14}, '42':{name:'Rose',price:12},
       '10':{name:'Anchor',price:10}, '11':{name:'Butterfly',price:12}, '15':{name:'Heart',price:10}, '20':{name:'Star',price:8},
@@ -538,9 +658,17 @@ const CATALOG = {
       {name:'1 Summer Braid',price:14},
       {name:'2 Summer Braids',price:28},
       {name:'3 Summer Braids',price:30},
+    ],
+    // Last-resort offline default for the Téréré sub-menu (sheet columns J/K) — kept in sync
+    // with the real sheet values so a no-network/no-cache view still shows the right 3 sizes
+    // instead of a single made-up price.
+    terereFallback:[
+      {name:'Téréré M', price:14},
+      {name:'Téréré L', price:16},
+      {name:'Téréré XL', price:18},
     ] },
   caps: { label:'Caps', accentVar:'--accent-orange', type:'caps', fallbackPrices:{custom:18, regular:18}, fallbackNames:{custom:'Custom cap', regular:'Regular cap'} },
-  others: { label:'Others', accentVar:'--accent-green', type:'list',
+  others: { label:'Others', accentVar:'--white', type:'list',
     fallbackItems:[ {name:'T-Shirt',price:15}, {name:'Keychain',price:6} ] },
 };
 const KIOSK_FALLBACK = ['ALFA1','ALFA2','CHARLIE','DELTA'];
@@ -551,13 +679,24 @@ const sheet = {
   tattoos:null, braids:null, others:null, terere:null, capPrices:null, capNames:null, staff:null, kiosks:null,
   cacheUpdatedAt:null, dailyTotals:null, ordersToday:null,
 };
-/* The sheet has a dedicated Terere column (M/L/XL) separate from the Braid column — the Apps
-   Script's ?lookup=all response should expose that as its own field. The exact key name isn't
-   confirmed, so this checks a few likely spellings; whichever one the backend actually uses,
-   this picks it up automatically. */
+/* The sheet has a dedicated Terere column (M/L/XL, sheet columns J/price K) separate from the
+   Braid column — the Apps Script's ?lookup=all response should expose that as its own field.
+   The exact key name coming back from the real backend isn't confirmed, so this first checks a
+   few likely spellings, then — since guessing the key wrong was silently dropping the real
+   M/L/XL rows and falling back to a single hardcoded "Téréré $16" placeholder — falls back to
+   scanning EVERY array in the response for name/price rows that look like Terere items,
+   regardless of which key they're filed under. That way this keeps working even if the backend
+   uses a field name none of the guesses below cover. */
 function extractTerereList(data){
-  const candidates = [data.terere, data.tereres, data.tereré, data.Terere];
+  const candidates = [data.terere, data.tereres, data.tereré, data.Terere, data.terereList, data.tereréList];
   for(const c of candidates){ if(Array.isArray(c) && c.length) return c; }
+  for(const key of Object.keys(data||{})){
+    const val = data[key];
+    if(Array.isArray(val) && val.length && val.every(it=>it && typeof it==='object' && 'name' in it)){
+      const matches = val.filter(it=>isTerereItem(it.name));
+      if(matches.length) return matches;
+    }
+  }
   return [];
 }
 function isTerereItem(name){
@@ -593,7 +732,7 @@ const state = {
   staffName:'',
   register:{ category:'tattoos', expanded:true, subExpanded:false, keypad:'', preview:null, previewLoading:false, tattooLoading:false, capMode:'custom', capName:'', capPrice:18, capPriceLoading:false, cart:[] },
   orders:{ view:'list', hourFilter:'', expandedId:null },
-  admin:{ tab:'global', selectedKiosk:0 },
+  admin:{ tab:'global', selectedKiosk:0, saleMsgOpen:false },
   itemStyle:'border',
   settings:{
     requireLogin:true,
@@ -603,23 +742,39 @@ const state = {
     idleTimeoutSec:CONFIG.idleTimeoutSeconds,
     refreshBusy:false,
     refreshMsg:'',
+    saleMessages: SALE_MESSAGE_DEFAULTS.map(m=>({...m})),
+    homeAnimEnabled:true,
   },
 };
 
 /* ================= NAV ================= */
 function goto(name){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  const map = { home:'screen-home', register:'screen-register', orders:'screen-orders', reports:'screen-reports', admin:'screen-admin', kiosks:'screen-admin', payment:'screen-payment', success:'screen-success', login:'screen-login' };
+  const map = { home:'screen-home', register:'screen-register', orders:'screen-orders', reports:'screen-reports', saledetail:'screen-saledetail', admin:'screen-admin', kiosks:'screen-admin', payment:'screen-payment', success:'screen-success', login:'screen-login' };
   document.getElementById(map[name]).classList.add('active');
   state.screen = name;
+  if(name==='home') playHomeEntrance();
   if(name==='register') renderRegister();
   if(name==='orders'){ renderOrders(); refreshDailyTotals(true); }
   if(name==='reports'){ renderReports(); refreshDailyTotals(true); }
+  if(name==='saledetail'){ renderSaleDetail(); refreshDailyTotals(true); }
   if(name==='admin'||name==='kiosks'){ if(name==='kiosks') state.admin.tab='kiosks'; renderAdmin(); }
   if(name==='payment') renderPayment();
   renderChargeBar();
   document.getElementById('confirmPayBtn').classList.toggle('hidden', name!=='payment');
   resetIdleTimer();
+}
+/* Replays the Home screen's tile entrance animation (see the tileDescend/tileRise keyframes)
+   every time Home becomes active, not just on first page load — remove the animation classes,
+   force a reflow so the browser forgets it already ran, then re-add them. Skips straight to
+   the settled state (no-anim) when turned off in Admin > Settings. */
+function playHomeEntrance(){
+  const tiles = document.querySelectorAll('#screen-home .grid .tile');
+  if(!tiles.length) return;
+  const enabled = state.settings.homeAnimEnabled;
+  tiles.forEach(el=>{ el.classList.remove('enter-down','enter-up','no-anim'); });
+  void document.getElementById('screen-home').offsetWidth;
+  tiles.forEach((el,i)=>{ el.classList.add(enabled ? (i<4 ? 'enter-down' : 'enter-up') : 'no-anim'); });
 }
 function renderChargeBar(){
   const total = state.register.cart.reduce((s,i)=>s+i.price,0);
@@ -739,6 +894,27 @@ function pinPress(digit){
 }
 function pinBack(){ if(state.loginBusy) return; state.pin = state.pin.slice(0,-1); renderPinDots(); }
 
+/* Demo-mode login (preview builds only) ---------------------------------------
+   Real kiosks (GitHub Pages) always reach the real staff sheet, so this never shows
+   there. It exists purely so the app can be click-tested on hosts that can't reach
+   the Google Sheet at all — e.g. a published Cowork Artifact, whose platform CSP
+   blocks every outbound fetch. Gated on BOTH: (a) not a known production host, and
+   (b) no real staff data cached yet. If you add a custom domain for the real
+   deployment, add it to PRODUCTION_HOSTS below so this stays hidden there too. */
+const PRODUCTION_HOSTS_SUFFIXES = ['.github.io'];
+function isPreviewHost(){
+  const h = location.hostname || '';
+  return !PRODUCTION_HOSTS_SUFFIXES.some(suffix => h.endsWith(suffix));
+}
+function updateDemoLoginVisibility(){
+  const btn = document.getElementById('demoLoginBtn');
+  if(!btn) return;
+  const hasRealStaffCache = !!(sheet.staff && sheet.staff.length);
+  btn.style.display = (isPreviewHost() && !hasRealStaffCache) ? 'block' : 'none';
+}
+function demoLogin(){
+  completeLogin('Demo Staff', state.currentKiosk);
+}
 function staffLogin(){
   const code = state.pin;
   const cached = (sheet.staff||[]).find(s=>String(s.code).toUpperCase()===code.toUpperCase());
@@ -758,6 +934,7 @@ function staffLogin(){
     state.loginBusy = false;
     state.pin=''; renderPinDots();
     setLoginHint('Connection error — try again');
+    updateDemoLoginVisibility();
   });
 }
 function completeLogin(name, shop){
@@ -788,7 +965,8 @@ function renderRegister(){
   if(r.expanded){
     if(cat.type==='keypad'){
       const p = r.preview;
-      const previewText = r.previewLoading ? 'checking…' : (p ? (p.found ? `${p.name} &nbsp; ${fmt(p.price)}` : 'not found') : '');
+      const notFoundText = isPreviewHost() ? `Sample &nbsp; ${fmt(CONFIG.sampleTattooPrice)}` : 'not found';
+      const previewText = r.previewLoading ? 'checking…' : (p ? (p.found ? `${p.name} &nbsp; ${fmt(p.price)}` : notFoundText) : '');
       html += `<div class="preview-card"><span>${r.keypad || '····'}</span><span>${previewText}</span></div>`;
       html += `<div class="keypad-grid"><div class="grid3">`;
       const keys = ['1','2','3','4','5','6','7','8','9','x','0','Ent'];
@@ -836,7 +1014,7 @@ function renderRegister(){
     if(!tereList){
       const braidSource = (sheet.braids && sheet.braids.length) ? sheet.braids : CATALOG.braids.fallbackItems;
       const tereItems = braidSource.filter(it=>isTerereItem(it.name));
-      tereList = tereItems.length ? tereItems : [{name:'Téréré', price:16}];
+      tereList = tereItems.length ? tereItems : CATALOG.braids.terereFallback;
     }
     html += `<button class="pill accent-purple" onclick="toggleSubExpand()">Téréré <span class="arrow">${r.subExpanded?'▼':'▶'}</span></button>`;
     if(r.subExpanded){
@@ -849,7 +1027,7 @@ function renderRegister(){
   if(r.cart.length){
     html += `<div class="section-label">Current Order</div>`;
     r.cart.forEach((it,idx)=>{
-      html += `<div class="cart-item" style="--item-accent:var(${it.accentVar});" onclick="removeFromCart(${idx})"><span>${it.name}</span><span class="price">${fmt(it.price)}</span></div>`;
+      html += `<div class="cart-item" style="--item-accent:var(${it.accentVar});" onclick="confirmRemoveFromCart(${idx})"><span>${it.name}</span><span class="price">${fmt(it.price)}</span></div>`;
     });
   } else {
     html += `<p class="empty-hint">Tap an item to add it to the order</p>`;
@@ -902,6 +1080,17 @@ function keypadPress(k){
   renderRegister();
   schedulePreviewLookup();
 }
+/* PREVIEW-ONLY (see isPreviewHost()): a number not in the catalog still gets added, as a
+   flat-priced "Sample" entry, instead of being blocked with "not found". This is purely so the
+   design/flow can be click-tested here without needing real catalog numbers — it must NOT reach
+   the real kiosks, where an unrecognized number should keep blocking the sale (staff should only
+   ever charge for tattoos actually in the sheet). isPreviewHost() already keeps this off any
+   `.github.io` production host; if a custom domain gets added for the real deployment, add it to
+   PRODUCTION_HOSTS_SUFFIXES too. */
+function addSampleTattoo(raw){
+  addToCart(`#${raw} | Sample`, CONFIG.sampleTattooPrice, CATALOG.tattoos.accentVar);
+  state.register.keypad=''; state.register.preview=null;
+}
 function tattooEnter(){
   const r = state.register;
   if(r.tattooLoading) return;
@@ -909,18 +1098,20 @@ function tattooEnter(){
   if(!raw) return;
   const n = parseInt(raw,10);
   const cached = (sheet.tattoos||[]).find(t=>Number(t.number)===n);
-  if(cached){ addToCart(`#${raw} | ${cached.name}`, Number(cached.price), '--white'); r.keypad=''; r.preview=null; return; }
+  if(cached){ addToCart(`#${raw} | ${cached.name}`, Number(cached.price), CATALOG.tattoos.accentVar); r.keypad=''; r.preview=null; return; }
   r.tattooLoading = true;
   renderRegister();
   fetch(CONFIG.SHEET_URL + '?number=' + n).then(res=>res.json()).then(data=>{
     r.tattooLoading = false;
-    if(data.found){ addToCart(`#${raw} | ${data.name}`, Number(data.price), '--white'); r.keypad=''; r.preview=null; }
+    if(data.found){ addToCart(`#${raw} | ${data.name}`, Number(data.price), CATALOG.tattoos.accentVar); r.keypad=''; r.preview=null; }
+    else if(isPreviewHost()){ addSampleTattoo(raw); }
     else { r.preview = {found:false}; renderRegister(); }
   }).catch(err=>{
     console.error('Tattoo enter failed, using fallback:', err);
     r.tattooLoading = false;
     const fb = CATALOG.tattoos.fallback[raw];
-    if(fb){ addToCart(`#${raw} | ${fb.name}`, fb.price, '--white'); r.keypad=''; r.preview=null; }
+    if(fb){ addToCart(`#${raw} | ${fb.name}`, fb.price, CATALOG.tattoos.accentVar); r.keypad=''; r.preview=null; }
+    else if(isPreviewHost()){ addSampleTattoo(raw); }
     else { r.preview = {found:false}; renderRegister(); }
   });
 }
@@ -929,7 +1120,20 @@ function addToCart(name, price, accentVar, category){
   state.register.cart.push({name, price, accentVar, category: category || state.register.category});
   renderRegister();
 }
-function removeFromCart(idx){ state.register.cart.splice(idx,1); renderRegister(); }
+/* Tapping a cart item no longer removes it immediately — it opens a Yes/No confirmation
+   naming the exact item, so a stray tap on the order list can't silently drop a sale. */
+function confirmRemoveFromCart(idx){
+  const it = state.register.cart[idx];
+  if(!it) return;
+  const html = `<div class="modal-title">Remove item?</div>
+    <p style="text-align:center;color:var(--text-soft);font-size:14px;margin:0 0 4px;">Remove <strong style="color:var(--white);">${it.name}</strong> (${fmt(it.price)}) from this order?</p>
+    <div class="modal-actions">
+      <button class="modal-btn ghost" onclick="closeModal()">No</button>
+      <button class="modal-btn primary" onclick="removeFromCart(${idx})">Yes, remove</button>
+    </div>`;
+  openModal(html);
+}
+function removeFromCart(idx){ state.register.cart.splice(idx,1); closeModal(); renderRegister(); }
 
 /* Cap price lookup: cache-first (sheet.capPrices), else live ?lookup=cap&name=, else fallback. */
 function selectCapType(type){
@@ -983,7 +1187,7 @@ function renderPayment(){
   let orderHtml = `<button class="pill dark" onclick="togglePaymentOrder()"><span>${cart.length} item order</span><span class="arrow">${paymentOrderExpanded?'▼':'▶'}</span></button>`;
   if(paymentOrderExpanded){
     cart.forEach(it=>{
-      orderHtml += `<div class="pay-item-row"><span>${it.name}</span><span class="price">${fmt(it.price)}</span></div>`;
+      orderHtml += `<div class="pay-item-row" style="--item-accent:var(${it.accentVar});"><span>${it.name}</span><span class="price">${fmt(it.price)}</span></div>`;
     });
   }
   document.getElementById('payOrderList').innerHTML = orderHtml;
@@ -1013,9 +1217,21 @@ function confirmPayment(){
     items: cart.map(c=>({name:c.name, qty:1, price:c.price, category:c.category})) });
   document.getElementById('successTotal').textContent = fmt(total);
   document.getElementById('successMeta').textContent = selectedMethod + ' · ' + cart.length + ' item(s)';
+  document.getElementById('successCheer').textContent = getSaleMessage(total, state.staffName);
   state.register.cart = [];
   goto('success');
+  playSuccessCheckAnimation();
   setTimeout(()=>refreshDailyTotals(true), 1200);
+}
+/* Replays the "circle draws, then check mark draws" animation, plus the cheer message's
+   fade-up (timed to start right after the check mark finishes drawing — see the .75s delay
+   on .success-cheer.animate), every time a sale completes — same remove/reflow/re-add trick
+   as playHomeEntrance(), since these elements are reused across sales rather than re-created. */
+function playSuccessCheckAnimation(){
+  const el = document.getElementById('successCheck');
+  const cheer = document.getElementById('successCheer');
+  if(el){ el.classList.remove('animate'); void el.offsetWidth; el.classList.add('animate'); }
+  if(cheer){ cheer.classList.remove('animate'); void cheer.offsetWidth; cheer.classList.add('animate'); }
 }
 function logSaleToSheet(sale){
   const params = new URLSearchParams({action:'logSale', kiosk:sale.kiosk, staff:sale.staff, items:sale.items, category:sale.category, method:sale.method, total:sale.total});
@@ -1051,6 +1267,15 @@ function todaysOrders(){
   const all = (sheet.ordersToday && sheet.ordersToday.length) ? sheet.ordersToday : ORDERS;
   return all.filter(o => o.kioskId === state.currentKiosk);
 }
+/* Maps a stored order item's category back to that category's current accent color, the same
+   way the register's cart items get their --item-accent — so an expanded order in Order
+   History reads with the same per-product colors as Current Order, not a flat text line.
+   Falls back to white for anything without a recognized category (e.g. a real-backend order
+   row that only carries one combined items string, with no per-item category breakdown). */
+function categoryAccentVar(category){
+  const cat = CATALOG[category];
+  return cat ? cat.accentVar : '--white';
+}
 function parseHour(timeStr){
   if(!timeStr) return null;
   const m = String(timeStr).match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
@@ -1073,7 +1298,7 @@ function renderOrdersList(){
         <div class="head"><span>${ord.id} &nbsp;| ${ord.time} | ${ord.method}</span><span>${fmt(ord.total)}</span></div>`;
       if(exp){
         ord.items.forEach(it=>{
-          html += `<div class="order-sub"><span>X${it.qty} &nbsp;${it.name}</span><span>${fmt(it.price)}</span></div>`;
+          html += `<div class="order-sub" style="--item-accent:var(${categoryAccentVar(it.category)});"><span>X${it.qty} &nbsp;${it.name}</span><span>${fmt(it.price)}</span></div>`;
         });
       }
       html += `</div>`;
@@ -1107,18 +1332,48 @@ function setHourFilter(v){
    orders if the sheet hasn't returned data yet. */
 function localOrdersTotals(){
   const orders = ORDERS.filter(o=>o.kioskId === state.currentKiosk);
-  let total = 0; const catTotals = {Tattoos:0, Braids:0, Caps:0}; const methodTotals = {};
+  let total = 0; const catTotals = {Tattoos:0, Braids:0, Caps:0, Others:0}; const methodTotals = {};
   orders.forEach(o=>{
     o.items.forEach(it=>{
       total += it.price*it.qty;
       const cat = it.category || (it.name.toLowerCase().indexOf('cap')>=0 ? 'caps' :
         (isTerereItem(it.name) || CATALOG.braids.fallbackItems.some(b=>b.name===it.name) ? 'braids' : 'tattoos'));
-      const key = cat==='caps' ? 'Caps' : (cat==='braids' ? 'Braids' : 'Tattoos');
+      const key = cat==='caps' ? 'Caps' : (cat==='braids' ? 'Braids' : (cat==='others' ? 'Others' : 'Tattoos'));
       catTotals[key] = (catTotals[key]||0) + it.price*it.qty;
     });
     methodTotals[o.method] = (methodTotals[o.method]||0) + o.total;
   });
   return { total, count: orders.length, catTotals, methodTotals };
+}
+/* Shared by Reports and Sale Details — both show the same category/payment breakdown for the
+   active kiosk, just in different visual styles (bars vs. plain rows). Category breakdown stays
+   a cross-kiosk aggregate when it comes from the live sheet (dt.categoryTotals has no per-kiosk
+   split yet); "Others" simply reads as $0 if the backend doesn't track that bucket. */
+function getCategoryTotals(){
+  const dt = sheet.dailyTotals;
+  const useSheetCat = !!(dt && dt.categoryTotals);
+  const CAT_KEY_MAP = {tattoos:'Tattoos', braids:'Braids', caps:'Caps', others:'Others'};
+  let catTotals = {Tattoos:0, Braids:0, Caps:0, Others:0};
+  if(useSheetCat){
+    Object.keys(dt.categoryTotals).forEach(k=>{
+      const mapped = CAT_KEY_MAP[String(k).toLowerCase()];
+      if(mapped) catTotals[mapped] = Number(dt.categoryTotals[k])||0;
+    });
+  } else { catTotals = localOrdersTotals().catTotals; }
+  return catTotals;
+}
+function getKioskTotal(){
+  const dt = sheet.dailyTotals;
+  const local = localOrdersTotals();
+  const haveKioskTotal = !!(dt && dt.kioskTotals && dt.kioskTotals[state.currentKiosk] != null);
+  return haveKioskTotal ? Number(dt.kioskTotals[state.currentKiosk]) : local.total;
+}
+function getPaymentTotals(){
+  const kioskOrders = todaysOrders(); // already filtered to state.currentKiosk
+  const sourceOrders = (sheet.ordersToday && sheet.ordersToday.length) ? kioskOrders : ORDERS.filter(o=>o.kioskId===state.currentKiosk);
+  const methodTotals = {};
+  sourceOrders.forEach(o=>{ methodTotals[o.method] = (methodTotals[o.method]||0) + o.total; });
+  return methodTotals;
 }
 function renderReports(){
   // Today's Sales is scoped to the ACTIVE kiosk only (cross-kiosk totals live in Admin > Kiosks
@@ -1129,41 +1384,61 @@ function renderReports(){
   const dt = sheet.dailyTotals;
   const kioskOrders = todaysOrders(); // already filtered to state.currentKiosk
   const local = localOrdersTotals();
-  const haveKioskTotal = !!(dt && dt.kioskTotals && dt.kioskTotals[state.currentKiosk] != null);
-  const total = haveKioskTotal ? Number(dt.kioskTotals[state.currentKiosk]) : local.total;
+  const total = getKioskTotal();
   const count = (sheet.ordersToday && sheet.ordersToday.length) ? kioskOrders.length : local.count;
   const avg = count ? total/count : 0;
   document.getElementById('repTotal').textContent = fmt(total);
   document.getElementById('repOrders').textContent = count;
   document.getElementById('repAvg').textContent = fmt1(avg);
 
-  const useSheetCat = !!(dt && dt.categoryTotals);
-  const CAT_KEY_MAP = {tattoos:'Tattoos', braids:'Braids', caps:'Caps'};
-  let catTotals = {Tattoos:0, Braids:0, Caps:0};
-  if(useSheetCat){
-    Object.keys(dt.categoryTotals).forEach(k=>{
-      const mapped = CAT_KEY_MAP[String(k).toLowerCase()];
-      if(mapped) catTotals[mapped] = Number(dt.categoryTotals[k])||0;
-    });
-  } else { catTotals = local.catTotals; }
-  const catAccent = {Tattoos:'--white', Braids:'--accent-pink', Caps:'--accent-orange'};
-  const maxCat = Math.max(1, ...Object.values(catTotals));
+  const catTotals = getCategoryTotals();
+  // Bar width is each category's share of the category total (not scaled to whichever
+  // category happens to be largest), so the bars are readable as an actual percentage split.
+  const sumCat = Object.values(catTotals).reduce((a,b)=>a+Number(b||0),0) || 1;
   document.getElementById('repCats').innerHTML = Object.keys(catTotals).map(name=>`
     <div class="bar-row"><div class="lbl"><span>${name}</span><span>${fmt(catTotals[name])}</span></div>
-    <div class="bar-track"><div class="bar-fill" style="width:${(catTotals[name]/maxCat*100).toFixed(0)}%;background:var(${catAccent[name]});"></div></div></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${(catTotals[name]/sumCat*100).toFixed(0)}%;background:var(--white);"></div></div></div>
   `).join('');
 
   // Payment mix: computed from this kiosk's own orders (either sheet- or locally-sourced,
   // both already filtered to state.currentKiosk), not from the cross-kiosk dt.methodTotals.
-  const sourceOrders = (sheet.ordersToday && sheet.ordersToday.length) ? kioskOrders : ORDERS.filter(o=>o.kioskId===state.currentKiosk);
-  const methodTotals = {};
-  sourceOrders.forEach(o=>{ methodTotals[o.method] = (methodTotals[o.method]||0) + o.total; });
+  // Bar width is each method's share of total payments, same percentage-of-whole logic as above.
+  const methodTotals = getPaymentTotals();
   const payEntries = PAY_METHODS.filter(m=>methodTotals[m]);
-  const maxPay = Math.max(1, ...payEntries.map(m=>methodTotals[m]));
+  const sumPay = payEntries.reduce((a,m)=>a+Number(methodTotals[m]||0),0) || 1;
   document.getElementById('repPay').innerHTML = payEntries.map(m=>`
     <div class="bar-row"><div class="lbl"><span>${m}</span><span>${fmt(methodTotals[m])}</span></div>
-    <div class="bar-track"><div class="bar-fill" style="width:${(methodTotals[m]/maxPay*100).toFixed(0)}%;background:var(--accent-green);"></div></div></div>
+    <div class="bar-track"><div class="bar-fill" style="width:${(methodTotals[m]/sumPay*100).toFixed(0)}%;background:var(--accent-green);"></div></div></div>
   `).join('');
+}
+
+/* Full-detail view for the active kiosk's sales today: same underlying numbers as Today's Sales
+   (Reports), just laid out as plain rows instead of bar charts, with a Total row at the bottom.
+   Title shows kiosk + last-synced time + today's date, since this is a snapshot as of the most
+   recent sheet refresh, not a single order's receipt. */
+const PAY_SHORT_LABELS = {'Cash':'Cash', 'Card / phone card':'Card/phone', 'Revolut':'Revolut', 'MB WAY':'MB WAY', 'Other':'Others'};
+function renderSaleDetail(){
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const dd = String(now.getDate()).padStart(2,'0');
+  const mo = String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('sdTitle').textContent = `${formatKioskName(state.currentKiosk)}  ${hh}:${mm}  |  ${dd}-${mo}-${now.getFullYear()}`;
+
+  const catTotals = getCategoryTotals();
+  document.getElementById('sdCats').innerHTML = Object.keys(catTotals).map(name=>`
+    <div class="row-card detail-row"><span class="lbl">${name}</span><span class="price">${fmt(catTotals[name])}</span></div>
+  `).join('');
+
+  const methodTotals = getPaymentTotals();
+  const payEntries = PAY_METHODS.filter(m=>methodTotals[m]);
+  document.getElementById('sdPay').innerHTML = payEntries.map(m=>`
+    <div class="row-card detail-row"><span class="lbl">${PAY_SHORT_LABELS[m]||m}</span><span class="price">${fmt(methodTotals[m])}</span></div>
+  `).join('');
+
+  document.getElementById('sdTotal').innerHTML = `
+    <div class="row-card detail-row total"><span class="lbl">Total</span><span class="price">${fmt(getKioskTotal())}</span></div>
+  `;
 }
 
 /* ================= ADMIN ================= */
@@ -1241,6 +1516,25 @@ function renderAdmin(){
       <div style="display:flex;justify-content:space-between;"><span class="lbl">Idle timeout</span><span class="lbl" id="idleTimeoutVal">${state.settings.idleTimeoutSec} sec</span></div>
       <input type="range" class="settings-slider" min="10" max="180" step="5" value="${state.settings.idleTimeoutSec}" oninput="setIdleTimeout(this.value)">
     </div>`;
+
+    html += `<div class="section-label">Home screen</div>`;
+    html += `<div class="swatch-row"><span class="lbl">Tile entrance animation</span><div class="seg" style="margin:0;width:140px;background:var(--card);"><button class="${state.settings.homeAnimEnabled?'on':''}" onclick="setHomeAnimEnabled(true)">On</button><button class="${!state.settings.homeAnimEnabled?'on':''}" onclick="setHomeAnimEnabled(false)">Off</button></div></div>`;
+
+    html += `<div class="section-label">Sale Complete screen</div>`;
+    html += `<button class="pill dark" onclick="toggleSaleMsgSection()"><span>Staff cheer messages</span><span class="arrow">${state.admin.saleMsgOpen?'▼':'▶'}</span></button>`;
+    if(state.admin.saleMsgOpen){
+      html += `<div class="section-label" style="margin-top:10px;">Shown by sale total — use {name} for the staff member's first name.</div>`;
+      state.settings.saleMessages.forEach((m,i)=>{
+        html += `<div class="swatch-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="lbl" style="white-space:nowrap;">$${m.threshold}+</span>
+            <input class="text-input" style="margin-bottom:0;width:64px;flex:none;text-align:center;" type="number" min="0" value="${m.threshold}" onchange="setSaleMsgThreshold(${i},this.value)">
+            <input class="text-input" style="margin-bottom:0;flex:1;" value="${m.text.replace(/"/g,'&quot;')}" oninput="setSaleMsgText(${i},this.value)">
+          </div>
+        </div>`;
+      });
+      html += `<button class="modal-btn ghost" style="width:100%;margin-top:4px;" onclick="resetSaleMessages()">Reset to defaults</button>`;
+    }
   }
   document.getElementById('adminBody').innerHTML = html;
 }
@@ -1248,11 +1542,37 @@ function cssVarHex(name){
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v.startsWith('#') ? v : '#434298';
 }
-function setVar(name, val){ document.documentElement.style.setProperty(name, val); }
+function getDesignStore(){ try{ return JSON.parse(localStorage.getItem(DESIGN_KEY)) || {}; }catch(e){ return {}; } }
+function saveDesignStore(d){ try{ localStorage.setItem(DESIGN_KEY, JSON.stringify(d)); }catch(e){} }
+function setVar(name, val){
+  document.documentElement.style.setProperty(name, val);
+  const d = getDesignStore();
+  d.vars = d.vars || {};
+  d.vars[name] = val;
+  saveDesignStore(d);
+}
 function setItemStyle(mode){
   state.itemStyle = mode;
   document.getElementById('app').classList.toggle('style-fill', mode==='fill');
   renderAdmin();
+  const d = getDesignStore();
+  d.itemStyle = mode;
+  saveDesignStore(d);
+}
+/* Re-applies whatever was saved from the Design tab (item style + any custom color vars) —
+   called once on boot so Admin > Design changes survive a reload/re-login, matching the
+   ADMIN_PIN_KEY / ACTIVE_KIOSK_KEY persistence pattern already used elsewhere. */
+function loadDesign(){
+  try{
+    const d = getDesignStore();
+    if(d.itemStyle === 'fill' || d.itemStyle === 'border'){
+      state.itemStyle = d.itemStyle;
+      document.getElementById('app').classList.toggle('style-fill', d.itemStyle === 'fill');
+    }
+    if(d.vars){
+      Object.keys(d.vars).forEach(k => document.documentElement.style.setProperty(k, d.vars[k]));
+    }
+  }catch(e){}
 }
 
 /* ================= SETTINGS: admin code, sheet cache, login toggle, idle timeout ================= */
@@ -1292,12 +1612,14 @@ function refreshSheetData(manual){
     if(manual) state.settings.refreshMsg = 'Data refreshed';
     showUpdatingBadge(false);
     renderAdmin();
+    updateDemoLoginVisibility();
   }).catch(err=>{
     console.error('Full sheet refresh failed:', err);
     state.settings.refreshBusy = false;
     if(manual) state.settings.refreshMsg = 'Refresh failed — check connection';
     showUpdatingBadge(false);
     renderAdmin();
+    updateDemoLoginVisibility();
   });
 }
 /* Cross-kiosk daily totals + today's orders — refreshed on load and whenever Orders/Reports
@@ -1336,6 +1658,58 @@ function setIdleTimeout(v){
   const el = document.getElementById('idleTimeoutVal');
   if(el) el.textContent = state.settings.idleTimeoutSec + ' sec';
   resetIdleTimer();
+}
+
+/* Staff cheer messages (Sale Complete screen) — persisted the same way as itemStyle/design
+   vars: saved on every edit, reloaded on boot so Admin's edits survive a reload/re-login. */
+function saveSaleMessages(){ try{ localStorage.setItem(SALE_MSG_KEY, JSON.stringify(state.settings.saleMessages)); }catch(e){} }
+function loadSaleMessages(){
+  try{
+    const raw = localStorage.getItem(SALE_MSG_KEY);
+    if(raw){
+      const saved = JSON.parse(raw);
+      if(Array.isArray(saved) && saved.length) state.settings.saleMessages = saved;
+    }
+  }catch(e){}
+}
+function toggleSaleMsgSection(){ state.admin.saleMsgOpen = !state.admin.saleMsgOpen; renderAdmin(); }
+function setSaleMsgThreshold(i, v){
+  const n = parseInt(v,10);
+  state.settings.saleMessages[i].threshold = isNaN(n) ? 0 : n;
+  saveSaleMessages();
+}
+function setSaleMsgText(i, v){
+  state.settings.saleMessages[i].text = v;
+  saveSaleMessages();
+}
+function resetSaleMessages(){
+  state.settings.saleMessages = SALE_MESSAGE_DEFAULTS.map(m=>({...m}));
+  saveSaleMessages();
+  renderAdmin();
+}
+/* Picks the tier whose threshold is the highest one at-or-below the sale total (tiers are
+   expected sorted ascending, but this sorts defensively in case Admin edited them out of
+   order), then swaps {name} for the staff's first name. */
+function getSaleMessage(total, staffName){
+  const tiers = [...state.settings.saleMessages].sort((a,b)=>a.threshold-b.threshold);
+  let msg = tiers[0] || SALE_MESSAGE_DEFAULTS[0];
+  for(const t of tiers){ if(total >= t.threshold) msg = t; }
+  const firstName = String(staffName||'').trim().split(' ')[0] || 'there';
+  return (msg.text||'').replace(/\{name\}/gi, firstName);
+}
+
+/* Home screen tile entrance animation on/off — persisted the same way as the other Admin >
+   Design/Settings toggles (auto-saved, no separate Save button). */
+function setHomeAnimEnabled(v){
+  state.settings.homeAnimEnabled = v;
+  try{ localStorage.setItem(HOME_ANIM_KEY, v ? '1' : '0'); }catch(e){}
+  renderAdmin();
+}
+function loadHomeAnimSetting(){
+  try{
+    const raw = localStorage.getItem(HOME_ANIM_KEY);
+    if(raw != null) state.settings.homeAnimEnabled = raw === '1';
+  }catch(e){}
 }
 
 /* ================= IDLE AUTO-LOGOUT =================
@@ -1389,7 +1763,11 @@ function loadCaches(){
 }
 function init(){
   loadCaches();
+  loadDesign();
+  loadSaleMessages();
+  loadHomeAnimSetting();
   if(state.settings.requireLogin){ goto('login'); } else { goto('home'); renderWho(); }
+  updateDemoLoginVisibility();
   refreshSheetData(false);
   refreshDailyTotals(false);
 }
