@@ -1335,40 +1335,60 @@ function setHourFilter(v){
 }
 
 /* ================= REPORTS =================
-   Scoped to the active kiosk (see renderReports below for the per-field breakdown of what's
-   truly per-kiosk from the backend vs. cross-kiosk). Falls back to summing today's local
-   orders if the sheet hasn't returned data yet. */
+   Scoped to the active kiosk throughout — total/count/avg/payment mix AND category breakdown.
+   Sourced from todaysOrders() (the sheet's per-kiosk order rows when available, else this
+   session's local orders), never from the sheet's dt.categoryTotals field, which is a
+   cross-kiosk aggregate across all 4 kiosks and would keep showing other kiosks' sales even
+   after this kiosk's own data is deleted. */
+/* A live sheet order row only carries one combined "1× X, 1× Y" items string and an order total
+   (no per-item category or price breakdown) — see the ?lookup=todayOrders shape above. When a
+   cart item carries its own category (orders placed on this device this session), that's used
+   directly. Otherwise the category is inferred from the item name: tattoos are always
+   "#NN | Name", cap items always contain "cap", braid/Téréré items are matched by name — anything
+   left over is bucketed as Others. */
+function categorizeItemName(name, explicitCategory){
+  if(explicitCategory){
+    return explicitCategory==='caps' ? 'Caps' : (explicitCategory==='braids' ? 'Braids' : (explicitCategory==='others' || explicitCategory==='other' ? 'Others' : 'Tattoos'));
+  }
+  const n = String(name||'');
+  if(/\bcap\b/i.test(n)) return 'Caps';
+  if(/#\d+/.test(n)) return 'Tattoos';
+  if(isTerereItem(n) || /\bbraids?\b/i.test(n)) return 'Braids';
+  return 'Others';
+}
+/* Returns {category: amount} for one order "item". A locally-placed item has a real category
+   and its own price, so it's a single-entry result. A live-sheet item is a squashed multi-item
+   string sharing one order total — each distinct category detected among its item names splits
+   that total evenly, since the backend doesn't expose a per-item price to split it precisely. */
+function itemCategoryShares(it){
+  if(it.category){
+    const out = {}; out[categorizeItemName(it.name, it.category)] = it.price; return out;
+  }
+  const frags = String(it.name||'').split(/,\s*/).map(s=>s.replace(/^\d+\s*[×x]\s*/i,'').trim()).filter(Boolean);
+  if(!frags.length){ const out = {}; out.Others = it.price; return out; }
+  const cats = Array.from(new Set(frags.map(f=>categorizeItemName(f))));
+  const share = it.price / cats.length;
+  const out = {};
+  cats.forEach(c=>{ out[c] = (out[c]||0) + share; });
+  return out;
+}
 function localOrdersTotals(){
-  const orders = ORDERS.filter(o=>o.kioskId === state.currentKiosk);
+  const orders = todaysOrders(); // already scoped to the active kiosk
   let total = 0; const catTotals = {Tattoos:0, Braids:0, Caps:0, Others:0}; const methodTotals = {};
   orders.forEach(o=>{
     o.items.forEach(it=>{
       total += it.price*it.qty;
-      const cat = it.category || (it.name.toLowerCase().indexOf('cap')>=0 ? 'caps' :
-        (isTerereItem(it.name) || CATALOG.braids.fallbackItems.some(b=>b.name===it.name) ? 'braids' : 'tattoos'));
-      const key = cat==='caps' ? 'Caps' : (cat==='braids' ? 'Braids' : (cat==='others' ? 'Others' : 'Tattoos'));
-      catTotals[key] = (catTotals[key]||0) + it.price*it.qty;
+      const shares = itemCategoryShares(it);
+      Object.keys(shares).forEach(k=>{ catTotals[k] = (catTotals[k]||0) + shares[k]; });
     });
     methodTotals[o.method] = (methodTotals[o.method]||0) + o.total;
   });
   return { total, count: orders.length, catTotals, methodTotals };
 }
 /* Shared by Reports and Sale Details — both show the same category/payment breakdown for the
-   active kiosk, just in different visual styles (bars vs. plain rows). Category breakdown stays
-   a cross-kiosk aggregate when it comes from the live sheet (dt.categoryTotals has no per-kiosk
-   split yet); "Others" simply reads as $0 if the backend doesn't track that bucket. */
+   active kiosk, just in different visual styles (bars vs. plain rows). */
 function getCategoryTotals(){
-  const dt = sheet.dailyTotals;
-  const useSheetCat = !!(dt && dt.categoryTotals);
-  const CAT_KEY_MAP = {tattoos:'Tattoos', braids:'Braids', caps:'Caps', others:'Others'};
-  let catTotals = {Tattoos:0, Braids:0, Caps:0, Others:0};
-  if(useSheetCat){
-    Object.keys(dt.categoryTotals).forEach(k=>{
-      const mapped = CAT_KEY_MAP[String(k).toLowerCase()];
-      if(mapped) catTotals[mapped] = Number(dt.categoryTotals[k])||0;
-    });
-  } else { catTotals = localOrdersTotals().catTotals; }
-  return catTotals;
+  return localOrdersTotals().catTotals;
 }
 function getKioskTotal(){
   const dt = sheet.dailyTotals;
@@ -1384,11 +1404,10 @@ function getPaymentTotals(){
   return methodTotals;
 }
 function renderReports(){
-  // Today's Sales is scoped to the ACTIVE kiosk only (cross-kiosk totals live in Admin > Kiosks
-  // instead). Total/count/avg/payment-mix can all be computed per-kiosk from what the backend
-  // returns; category breakdown can't (the sheet's dailyTotals.categoryTotals is a cross-kiosk
-  // aggregate with no per-kiosk split, and today's-orders rows don't carry a category field) —
-  // that one bar chart stays cross-kiosk until the backend exposes it per kiosk.
+  // Today's Sales is scoped to the ACTIVE kiosk only, throughout — total/count/avg/payment-mix
+  // AND category breakdown (cross-kiosk totals live in Admin > Kiosks instead). Category amounts
+  // are inferred per order (see getCategoryTotals/itemCategoryShares above) since the live sheet
+  // doesn't expose a category field per order row, only a combined items string.
   const dt = sheet.dailyTotals;
   const kioskOrders = todaysOrders(); // already filtered to state.currentKiosk
   const local = localOrdersTotals();
