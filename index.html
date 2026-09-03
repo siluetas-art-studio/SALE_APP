@@ -1059,7 +1059,15 @@ function renderRegister(){
       const items = r.category==='braids' ? rawItems.filter(it=>!isTerereItem(it.name)) : rawItems;
       if(items.length){
         items.forEach(it=>{
-          html += `<button class="row-card" onclick="addToCart('${it.name}',${Number(it.price)},'${cat.accentVar}')"><span>${it.name}</span><span class="price">${fmt(Number(it.price))}</span></button>`;
+          const price = Number(it.price);
+          // A row with no price set in the sheet (e.g. "DIVERSO" in Others) is a price-on-demand
+          // item -- tapping it asks the staff to type the amount for that particular sale instead
+          // of silently adding a $0 line.
+          if(price > 0){
+            html += `<button class="row-card" onclick="addToCart('${it.name}',${price},'${cat.accentVar}')"><span>${it.name}</span><span class="price">${fmt(price)}</span></button>`;
+          } else {
+            html += `<button class="row-card" onclick="promptCustomPrice('${it.name}','${cat.accentVar}')"><span>${it.name}</span><span class="price">Enter amount</span></button>`;
+          }
         });
       } else {
         html += `<p class="empty-hint">No "${cat.label}" products loaded from the sheet yet.</p>`;
@@ -1091,7 +1099,12 @@ function renderRegister(){
     html += `<button class="pill accent-purple" onclick="toggleSubExpand()">Téréré <span class="arrow">${r.subExpanded?'▼':'▶'}</span></button>`;
     if(r.subExpanded){
       tereList.forEach(tere=>{
-        html += `<button class="row-card" onclick="addToCart('${tere.name}',${Number(tere.price)},'--accent-purple')"><span>${tere.name}</span><span class="price">${fmt(Number(tere.price))}</span></button>`;
+        const terePrice = Number(tere.price);
+        if(terePrice > 0){
+          html += `<button class="row-card" onclick="addToCart('${tere.name}',${terePrice},'--accent-purple')"><span>${tere.name}</span><span class="price">${fmt(terePrice)}</span></button>`;
+        } else {
+          html += `<button class="row-card" onclick="promptCustomPrice('${tere.name}','--accent-purple')"><span>${tere.name}</span><span class="price">Enter amount</span></button>`;
+        }
       });
     }
   }
@@ -1191,6 +1204,32 @@ function tattooEnter(){
 function addToCart(name, price, accentVar, category){
   state.register.cart.push({name, price, accentVar, category: category || state.register.category});
   renderRegister();
+}
+/* Price-on-demand items (a sheet row with no price, like "DIVERSO" in Others) open this instead
+   of adding straight to the cart -- staff types the amount for that specific sale. Whole dollars
+   only, same as every other price in the app (see fmt()'s rounding comment). */
+function promptCustomPrice(name, accentVar){
+  const html = `<div class="modal-title">Enter amount</div>
+    <p style="text-align:center;color:var(--text-soft);font-size:14px;margin:0 0 4px;">${name}</p>
+    <input class="text-input" id="customPriceInput" placeholder="$0" inputmode="numeric" maxlength="4">
+    <div class="modal-err" id="customPriceErr"></div>
+    <div class="modal-actions">
+      <button class="modal-btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn primary" onclick="confirmCustomPrice('${name}','${accentVar}')">Add</button>
+    </div>`;
+  openModal(html);
+  setTimeout(()=>{ const el = document.getElementById('customPriceInput'); if(el) el.focus(); }, 50);
+}
+function confirmCustomPrice(name, accentVar){
+  const input = document.getElementById('customPriceInput');
+  const amount = Math.round(Number(input && input.value));
+  if(!input || !input.value || !isFinite(amount) || amount <= 0){
+    const errEl = document.getElementById('customPriceErr');
+    if(errEl) errEl.textContent = 'Enter a valid amount';
+    return;
+  }
+  addToCart(name, amount, accentVar);
+  closeModal();
 }
 /* Tapping a cart item no longer removes it immediately — it opens a Yes/No confirmation
    naming the exact item, so a stray tap on the order list can't silently drop a sale. */
