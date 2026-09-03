@@ -13,6 +13,11 @@
 <style>
   :root{
     --bg:#434298;
+    /* Admin's own background -- defaults to tracking --bg (so it looks identical until someone
+       explicitly picks a different color in Admin > Design), but can be set independently so the
+       Admin screen is visually distinguishable at a glance from the regular register/orders/
+       reports screens. See the "Admin background" swatch and #screen-admin's background rule. */
+    --admin-bg:var(--bg);
     --card:#38367B;
     --card-dark:#27245E;
     --card-mid:#3f3d8c;
@@ -320,6 +325,11 @@
   .detail-row.total .lbl, .detail-row.total .price{font-style:normal;font-weight:700;font-size:22px;}
 
   /* ---------- admin ---------- */
+  /* .screen has no background of its own (the .device frame's --bg shows through everywhere),
+     but .screen{position:absolute;inset:0} means #screen-admin fully covers the frame when
+     active, so giving it its own background here is enough to make Admin visually distinct
+     without touching any other screen. */
+  #screen-admin{background:var(--admin-bg);}
   .tabbar{background:var(--card-dark);border-radius:var(--radius);height:60px;padding:0 12px;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;font-family:var(--font-title);font-size:26px;color:var(--accent-orange);}
   .tabbar span{cursor:pointer;}
   .tabbar span.active{color:var(--white);}
@@ -1713,6 +1723,7 @@ function renderAdmin(){
     `;}).join('');
   } else if(state.admin.tab==='design'){
     html += `<div class="swatch-row"><span class="lbl">Background</span><input type="color" value="${cssVarHex('--bg')}" oninput="setVar('--bg',this.value)"></div>`;
+    html += `<div class="swatch-row"><span class="lbl">Admin background</span><input type="color" value="${cssVarHex('--admin-bg')}" oninput="setVar('--admin-bg',this.value)"></div>`;
     html += `<div class="swatch-row"><span class="lbl">Accent — Pink</span><input type="color" value="${cssVarHex('--accent-pink')}" oninput="setVar('--accent-pink',this.value)"></div>`;
     html += `<div class="swatch-row"><span class="lbl">Accent — Orange</span><input type="color" value="${cssVarHex('--accent-orange')}" oninput="setVar('--accent-orange',this.value)"></div>`;
     html += `<div class="swatch-row"><span class="lbl">Accent — Purple</span><input type="color" value="${cssVarHex('--accent-purple')}" oninput="setVar('--accent-purple',this.value)"></div>`;
