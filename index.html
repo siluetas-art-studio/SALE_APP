@@ -1376,7 +1376,14 @@ function confirmPayment(){
   const orderId = '#' + (1043 + (sheet.ordersToday ? sheet.ordersToday.length : 0) + ORDERS.length);
   const itemsStr = cart.map(c=>'1× '+c.name).join(', ');
   const categories = Array.from(new Set(cart.map(c=> c.category==='others' ? 'other' : c.category))).join('/');
-  logSaleToSheet({kiosk: state.currentKiosk, staff: state.staffName, items: itemsStr, category: categories, method: selectedMethod, total: total});
+  // requestId: a per-sale-attempt fingerprint, unique even if this exact fetch gets silently
+  // resent by the phone's network layer (observed on iPhone/Safari after a wifi/signal blip --
+  // the sheet ends up with two rows for the same sale, a minute apart, each with its own row
+  // number). The Apps Script side needs a small change to actually use this for de-duplication
+  // (skip inserting a row if it already logged this requestId in the last few minutes) -- until
+  // that's added there, this id is sent but not yet acted on server-side.
+  const requestId = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  logSaleToSheet({kiosk: state.currentKiosk, staff: state.staffName, items: itemsStr, category: categories, method: selectedMethod, total: total, requestId: requestId});
   // Reflect locally right away so Orders/Reports feel instant; refreshDailyTotals(true) below
   // reconciles against the sheet's authoritative totals shortly after.
   const now = new Date();
@@ -1403,7 +1410,7 @@ function playSuccessCheckAnimation(){
   if(cheer){ cheer.classList.remove('animate'); void cheer.offsetWidth; cheer.classList.add('animate'); }
 }
 function logSaleToSheet(sale){
-  const params = new URLSearchParams({action:'logSale', kiosk:sale.kiosk, staff:sale.staff, items:sale.items, category:sale.category, method:sale.method, total:sale.total});
+  const params = new URLSearchParams({action:'logSale', kiosk:sale.kiosk, staff:sale.staff, items:sale.items, category:sale.category, method:sale.method, total:sale.total, requestId:sale.requestId||''});
   fetch(CONFIG.SHEET_URL + '?' + params.toString()).catch(err=>console.error('Sale log failed:', err));
 }
 
