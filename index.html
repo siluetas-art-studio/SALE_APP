@@ -1244,11 +1244,20 @@ function addCap(){
 let pendingCategory = 'tattoos';
 let selectedMethod = null;
 let paymentOrderExpanded = false;
+// Set for the duration of one confirmPayment() submission and reset only when a genuinely NEW
+// transaction reaches the Payment screen (here, the sole entry point into it). Guards against
+// the Confirm Payment button firing more than once for the SAME tap: browsers — mobile Safari
+// especially — can queue/replay a touch or click event that arrived while the page was busy or
+// backgrounded, delivering it to confirmPayBtn again even after we've already moved on to the
+// Success screen. Without this, each extra delivery re-runs confirmPayment() and logs another
+// row to the sheet for a sale that only happened once.
+let paymentSubmitting = false;
 function goToPayment(){
   if(!state.register.cart.length) return;
   pendingCategory = state.register.category;
   selectedMethod = null;
   paymentOrderExpanded = false;
+  paymentSubmitting = false;
   goto('payment');
 }
 function renderPayment(){
@@ -1274,7 +1283,10 @@ function togglePaymentOrder(){ paymentOrderExpanded = !paymentOrderExpanded; ren
 function selectMethod(m){ selectedMethod = m; renderPayment(); }
 function confirmPayment(){
   if(!selectedMethod) return;
+  if(paymentSubmitting) return; // already charging this transaction -- ignore a duplicate/replayed activation
   const cart = state.register.cart;
+  if(!cart.length) return; // nothing left to charge -- guards a replayed activation arriving after the cart was already cleared
+  paymentSubmitting = true;
   const total = cart.reduce((s,i)=>s+i.price,0);
   const orderId = '#' + (1043 + (sheet.ordersToday ? sheet.ordersToday.length : 0) + ORDERS.length);
   const itemsStr = cart.map(c=>'1× '+c.name).join(', ');
