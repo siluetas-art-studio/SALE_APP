@@ -619,6 +619,11 @@ const CONFIG = {
   idleTimeoutSeconds: 45,
   sampleTattooPrice: 20,
 };
+// Staff code that marks a login as an admin session (the "RUIZ_AD" row in the Staff sheet, one
+// per shop) -- signing in with it skips the separate Admin PIN prompt, since typing this code was
+// already the admin-level credential. Compared against the code the person types, same as any
+// other staff code.
+const ADMIN_STAFF_CODE = '909';
 /* Staff cheer message on the Sale Complete screen — picks the tier whose threshold is the
    highest one at-or-below the sale total, so there's always a match with no gaps. "{name}" is
    replaced with the staff member's first name. Editable from Admin > Settings. */
@@ -746,6 +751,7 @@ const state = {
   loginBusy:false,
   currentKiosk:'ALFA1',
   staffName:'',
+  isAdminStaff:false, // true when the signed-in staff code is ADMIN_STAFF_CODE -- skips the Admin PIN gate
   register:{ category:'tattoos', expanded:true, subExpanded:false, keypad:'', preview:null, previewLoading:false, tattooLoading:false, capMode:'custom', capName:'', capPrice:18, capPriceLoading:false, cart:[] },
   orders:{ view:'list', hourFilter:'', expandedId:null },
   admin:{ tab:'global', selectedKiosk:0, saleMsgOpen:false, copiedKiosk:null },
@@ -899,6 +905,7 @@ function doLogout(){
   closeModal();
   state.pin='';
   state.staffName='';
+  state.isAdminStaff=false;
   renderPinDots();
   goto(state.settings.requireLogin ? 'login' : 'home');
 }
@@ -907,6 +914,13 @@ function doLogout(){
 let adminPinBuf = '';
 let adminGateTarget = 'global';
 function openAdminGate(targetTab){
+  // Signed in with the admin staff code (ADMIN_STAFF_CODE) -- that login already IS the admin
+  // credential, so skip re-asking for the separate 4-digit Admin PIN.
+  if(state.isAdminStaff){
+    state.admin.tab = targetTab || 'global';
+    goto('admin');
+    return;
+  }
   adminGateTarget = targetTab || 'global';
   adminPinBuf = '';
   renderAdminGate('');
@@ -988,7 +1002,7 @@ function staffLogin(){
   const code = state.pin;
   const cached = (sheet.staff||[]).find(s=>String(s.code).toUpperCase()===code.toUpperCase());
   if(cached){
-    if(String(cached.active).toUpperCase()==='Y'){ completeLogin(cached.name, cached.shop); }
+    if(String(cached.active).toUpperCase()==='Y'){ completeLogin(cached.name, cached.shop, code.toUpperCase()===ADMIN_STAFF_CODE); }
     else { state.pin=''; renderPinDots(); setLoginHint('Code not found or inactive'); }
     return;
   }
@@ -996,7 +1010,7 @@ function staffLogin(){
   setLoginHint('Checking…');
   fetch(bustUrl(CONFIG.SHEET_URL + '?staffCode=' + encodeURIComponent(code)), {cache:'no-store'}).then(r=>r.json()).then(data=>{
     state.loginBusy = false;
-    if(data.found && String(data.active).toUpperCase()==='Y'){ completeLogin(data.name, data.shop); }
+    if(data.found && String(data.active).toUpperCase()==='Y'){ completeLogin(data.name, data.shop, code.toUpperCase()===ADMIN_STAFF_CODE); }
     else { state.pin=''; renderPinDots(); setLoginHint('Code not found or inactive'); }
   }).catch(err=>{
     console.error('Staff lookup failed:', err);
@@ -1006,13 +1020,14 @@ function staffLogin(){
     updateDemoLoginVisibility();
   });
 }
-function completeLogin(name, shop){
+function completeLogin(name, shop, isAdmin){
   // Deliberately does NOT touch state.currentKiosk. The active kiosk is a property of this
   // physical device, set once via Admin — not of whichever staff member is currently signed
   // in. A staff code can match rows for multiple shops in the sheet (the same person working
   // at more than one kiosk), so the `shop` the login lookup happens to return is not reliable
   // signal for "which kiosk is this device."
   state.staffName = name;
+  state.isAdminStaff = !!isAdmin;
   state.pin=''; renderPinDots(); setLoginHint('type your code');
   goto('home'); renderWho();
 }
