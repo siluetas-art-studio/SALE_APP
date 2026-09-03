@@ -13,11 +13,14 @@
 <style>
   :root{
     --bg:#434298;
-    /* Admin's own background -- defaults to tracking --bg (so it looks identical until someone
-       explicitly picks a different color in Admin > Design), but can be set independently so the
-       Admin screen is visually distinguishable at a glance from the regular register/orders/
-       reports screens. See the "Admin background" swatch and #screen-admin's background rule. */
-    --admin-bg:var(--bg);
+    /* Admin's own palette -- separate from the app's product-category colors so Admin can have
+       its own visual identity, and (via the "Admin background" swatch in Admin > Design) can
+       still be overridden per device. --admin-bg is the screen background, --admin-card is the
+       row/card surface on top of it, --admin-accent is the single accent used for the active
+       tab, header, row highlights, and the Kiosk-share bars. */
+    --admin-bg:#36344C;
+    --admin-card:#212035;
+    --admin-accent:#03F2A0;
     --card:#38367B;
     --card-dark:#27245E;
     --card-mid:#3f3d8c;
@@ -91,7 +94,7 @@
     display:flex;align-items:center;justify-content:center;cursor:pointer;
   }
   .icon-btn svg{width:24px;height:24px;}
-  .icon-btn.accent{border-color:var(--accent-orange);color:var(--accent-orange);}
+  .icon-btn.accent{border-color:var(--admin-accent);color:var(--admin-accent);} /* admin-only (the Admin topbar's home button) */
   .who{text-align:right;}
   .who .kiosk{font-family:var(--font-title);font-size:24px;line-height:1;color:var(--text-soft);}
   .who .staff{font-size:18px;color:var(--text-faint);font-style:italic;margin-top:12px;cursor:pointer;}
@@ -330,28 +333,30 @@
      active, so giving it its own background here is enough to make Admin visually distinct
      without touching any other screen. */
   #screen-admin{background:var(--admin-bg);}
-  .tabbar{background:var(--card-dark);border-radius:var(--radius);height:60px;padding:0 12px;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;font-family:var(--font-title);font-size:26px;color:var(--accent-orange);}
+  /* Tab bar sits directly on the Admin background now (no pill behind it) -- active tab in the
+     admin accent, everything else in white. */
+  .tabbar{display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 0;margin-bottom:20px;font-family:var(--font-title);font-size:26px;color:var(--white);}
   .tabbar span{cursor:pointer;}
-  .tabbar span.active{color:var(--white);}
-  .tabbar .sep{cursor:default;color:var(--accent-orange);opacity:.55;font-family:var(--font-ui);font-weight:300;}
-  .admin-totals{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;margin-bottom:18px;}
-  .admin-totals .box{background:var(--card-dark);border-radius:var(--radius);padding:18px;}
-  .admin-totals .box .big{font-size:26px;color:var(--accent-orange);font-weight:700;}
-  .admin-totals .box .cap{font-size:13px;font-style:italic;color:var(--text-faint);margin-top:4px;}
-  .admin-totals .box .line{font-size:15px;color:var(--text-soft);display:flex;justify-content:space-between;margin-bottom:4px;}
-  /* Per-kiosk totals list, Admin > Global only — scoped separately from the shared .bar-row
-     used by Reports' category/payment bars, so this size bump doesn't spill over there. */
-  .kiosk-bar-row .lbl{font-size:20px;}
-  .kiosk-status{background:var(--card-dark);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;border:2px solid transparent;cursor:pointer;}
-  .kiosk-status.active{border-color:var(--accent-orange);}
+  .tabbar span.active{color:var(--admin-accent);}
+  .tabbar .sep{cursor:default;color:var(--white);opacity:.4;font-family:var(--font-ui);font-weight:300;}
+  /* Global tab: one row per kiosk/payment method, each its own card on --admin-card. Kiosk rows
+     get a thin share-of-grand-total bar (see .pct-bar); Payment rows reuse the same row style
+     without one; Total is the same row again, just bigger and in the admin accent. */
+  .admin-row{background:var(--admin-card);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;}
+  .admin-row .lbl{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--font-title);font-style:italic;font-weight:700;font-size:19px;}
+  .admin-row .pct-bar{height:2px;background:var(--admin-accent);border-radius:1px;margin-top:12px;}
+  .admin-row.total{padding:22px 18px;margin-top:8px;}
+  .admin-row.total .lbl{color:var(--admin-accent);font-size:22px;}
+  .kiosk-status{background:var(--admin-card);border-radius:var(--radius);padding:16px 18px;margin-bottom:10px;border:2px solid transparent;cursor:pointer;}
+  .kiosk-status.active{border-color:var(--admin-accent);}
   .kiosk-status .top{display:flex;justify-content:space-between;align-items:baseline;}
   .kiosk-status .name{font-weight:700;font-size:15px;}
-  .kiosk-status .tag{color:var(--accent-orange);font-style:italic;font-size:13px;}
+  .kiosk-status .tag{color:var(--admin-accent);font-style:italic;font-size:13px;}
   .kiosk-status .sale{font-size:14px;color:var(--text-soft);font-style:italic;margin-top:4px;}
-  .kiosk-status .status{font-style:italic;font-size:14px;color:var(--accent-orange);}
+  .kiosk-status .status{font-style:italic;font-size:14px;color:var(--admin-accent);}
   .kiosk-status .status.off{color:var(--text-faint);}
   .copy-link-btn{
-    margin-top:10px;width:100%;background:var(--card-mid);color:var(--accent-orange);
+    margin-top:10px;width:100%;background:var(--card-mid);color:var(--admin-accent);
     border:none;border-radius:var(--radius);padding:10px;
     font-family:var(--font-ui);font-style:italic;font-weight:600;font-size:13px;cursor:pointer;
   }
@@ -361,6 +366,11 @@
   .swatch-row .lbl{font-size:14px;color:var(--text-soft);}
   .swatch-row input[type=color]{width:40px;height:40px;border-radius:50%;border:2px solid rgba(255,255,255,.3);background:none;padding:0;cursor:pointer;}
   .seg{display:flex;background:var(--card-dark);border-radius:var(--radius);padding:4px;margin-bottom:18px;}
+  /* Admin's own surfaces (Kiosks/Design/Settings rows, inputs, toggles) get the same dark card
+     tone as Global's rows -- scoped to #screen-admin so Register/Orders/Reports, which share
+     these same classes, are untouched. */
+  #screen-admin .row-card, #screen-admin .swatch-row, #screen-admin .seg, #screen-admin .text-input{background:var(--admin-card);}
+  #screen-admin .settings-slider{accent-color:var(--admin-accent);}
   .seg button{flex:1;border:none;background:transparent;color:var(--text-faint);padding:12px 0;border-radius:var(--radius);font-family:var(--font-ui);font-weight:600;cursor:pointer;}
   .seg button.on{background:var(--accent-purple);color:#221a3a;}
   .mini-preview{margin-bottom:8px;}
@@ -550,7 +560,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>
         </button>
       </div>
-      <div class="who" style="color:var(--accent-orange);" onclick="openLogout()"><div class="kiosk" style="color:var(--accent-orange);cursor:pointer;">Alfa 1</div><div class="staff" style="color:var(--accent-orange);">Ruiz</div></div>
+      <div class="who" style="color:var(--admin-accent);" onclick="openLogout()"><div class="kiosk" style="color:var(--admin-accent);cursor:pointer;">Alfa 1</div><div class="staff" style="color:var(--admin-accent);">Ruiz</div></div>
     </div>
     <div class="tabbar" id="adminTabs">
       <span data-tab="global" onclick="setAdminTab('global')">Global</span><span class="sep">|</span>
@@ -700,6 +710,13 @@ const CATALOG = {
     fallbackItems:[ {name:'T-Shirt',price:15}, {name:'Keychain',price:6} ] },
 };
 const KIOSK_FALLBACK = ['ALFA1','ALFA2','CHARLIE','DELTA'];
+// The 4 real physical kiosks -- also the allowlist for Admin > Global's aggregates (grand total,
+// cash/other split, per-kiosk bars). A sheet can list OTHER kiosk-like entries too (e.g. a
+// temporary "TEST KIOSK" tab used for testing without touching real numbers) -- those still show
+// up normally in Admin > Kiosks so they can be selected and used, they're just excluded from
+// Global's totals so test sales never get counted as real ones. Reuses KIOSK_FALLBACK itself
+// rather than a second list, so a real kiosk only ever needs to be added in one place.
+function isRealKiosk(name){ return KIOSK_FALLBACK.includes(String(name||'').toUpperCase()); }
 const PAY_METHODS = ['Cash','Card / phone card','Revolut','MB WAY','Other'];
 
 /* ================= LIVE SHEET DATA (populated from cache, refreshed from network) ================= */
@@ -1692,20 +1709,35 @@ function renderAdmin(){
   if(state.admin.tab==='global'){
     const dt = sheet.dailyTotals;
     const local = localOrdersTotals();
-    const grand = (dt && dt.grandTotal!=null) ? Number(dt.grandTotal) : local.total;
-    const cash = (dt && dt.methodTotals && dt.methodTotals.Cash!=null) ? Number(dt.methodTotals.Cash) : (local.methodTotals.Cash||0);
+    // Rebuilt from real kiosks only -- dt.grandTotal/dt.methodTotals are whatever the backend
+    // sums across every shop tab it knows about, which now includes a temporary TEST KIOSK tab
+    // used for testing. dt.kioskTotals IS broken down per kiosk, so the grand total can be
+    // rebuilt safely from it; the cash/other split has no per-kiosk breakdown in dt, so that one
+    // needs sheet.ordersToday (today's orders across all kiosks, each carrying its own kiosk AND
+    // payment method) filtered the same way. Falls back to the old unfiltered fields only when
+    // neither has loaded yet.
+    const realKioskEntries = (dt && dt.kioskTotals) ? Object.keys(dt.kioskTotals).filter(isRealKiosk) : null;
+    const grand = realKioskEntries ? realKioskEntries.reduce((s,k)=> s + (Number(dt.kioskTotals[k])||0), 0)
+      : ((dt && dt.grandTotal!=null) ? Number(dt.grandTotal) : local.total);
+    const realOrdersToday = (sheet.ordersToday||[]).filter(o=>isRealKiosk(o.kioskId));
+    const cash = (sheet.ordersToday && sheet.ordersToday.length)
+      ? realOrdersToday.filter(o=>o.method==='Cash').reduce((s,o)=> s + (Number(o.total)||0), 0)
+      : ((dt && dt.methodTotals && dt.methodTotals.Cash!=null) ? Number(dt.methodTotals.Cash) : (local.methodTotals.Cash||0));
     const other = Math.max(0, grand - cash);
-    html += `<div class="admin-totals">
-      <div class="box"><div class="big">${fmt(grand)}</div><div class="cap">Total Today</div></div>
-      <div class="box"><div class="line"><span>${fmt(cash)}</span><span>CASH</span></div><div class="line"><span>${fmt(other)}</span><span>OTHER</span></div></div>
-    </div>`;
-    const names = kioskNames();
+    const names = kioskNames().filter(isRealKiosk); // Global's rows: real kiosks only -- see above
     const kioskTotals = names.map(n=>({ name:n, amount: (dt && dt.kioskTotals && dt.kioskTotals[n]!=null) ? Number(dt.kioskTotals[n]) : 0 }));
-    const max = Math.max(1, ...kioskTotals.map(k=>k.amount));
+    // Bars are share of the GRAND TOTAL (not the single highest kiosk) -- per the mockup, the
+    // longest bar does not reach the row's full width unless every real kiosk sold the same amount.
+    const pct = amt => grand > 0 ? Math.min(100, (amt / grand * 100)) : 0;
+    html += `<div class="section-label">Kiosk</div>`;
     html += kioskTotals.map(k=>`
-      <div class="bar-row kiosk-bar-row"><div class="lbl"><span>${formatKioskName(k.name)}</span><span>${fmt(k.amount)}</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${(k.amount/max*100).toFixed(0)}%;background:var(--accent-orange);"></div></div></div>
+      <div class="admin-row"><div class="lbl"><span>${formatKioskName(k.name)}</span><span>${fmt(k.amount)}</span></div>
+      <div class="pct-bar" style="width:${pct(k.amount).toFixed(1)}%;"></div></div>
     `).join('');
+    html += `<div class="section-label">Payment</div>`;
+    html += `<div class="admin-row"><div class="lbl"><span>Cash</span><span>${fmt(cash)}</span></div></div>`;
+    html += `<div class="admin-row"><div class="lbl"><span>Others</span><span>${fmt(other)}</span></div></div>`;
+    html += `<div class="admin-row total"><div class="lbl"><span>Total</span><span>${fmt(grand)}</span></div></div>`;
   } else if(state.admin.tab==='kiosks'){
     const dt = sheet.dailyTotals;
     const local = localOrdersTotals();
