@@ -539,9 +539,6 @@
         <button class="icon-btn accent" onclick="goto('home')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg>
         </button>
-        <button class="icon-btn accent" onclick="goto('home')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
-        </button>
       </div>
       <div class="who" style="color:var(--accent-orange);" onclick="openLogout()"><div class="kiosk" style="color:var(--accent-orange);cursor:pointer;">Alfa 1</div><div class="staff" style="color:var(--accent-orange);">Ruiz</div></div>
     </div>
@@ -755,7 +752,7 @@ const state = {
   register:{ category:'tattoos', expanded:true, subExpanded:false, keypad:'', preview:null, previewLoading:false, tattooLoading:false, capMode:'custom', capName:'', capPrice:18, capPriceLoading:false, cart:[] },
   orders:{ view:'list', hourFilter:'', expandedId:null },
   admin:{ tab:'global', selectedKiosk:0, saleMsgOpen:false, copiedKiosk:null },
-  itemStyle:'border',
+  itemStyle:'fill', // default for any device with no saved Design tab choice yet -- see loadDesign()
   settings:{
     requireLogin:true,
     showUpdatingIndicator:true,
@@ -780,7 +777,14 @@ function goto(name){
   if(name==='orders'){ renderOrders(); refreshDailyTotals(true); }
   if(name==='reports'){ renderReports(); refreshDailyTotals(true); }
   if(name==='saledetail'){ renderSaleDetail(); refreshDailyTotals(true); }
-  if(name==='admin'||name==='kiosks'){ if(name==='kiosks') state.admin.tab='kiosks'; renderAdmin(); }
+  if(name==='admin'||name==='kiosks'){
+    if(name==='kiosks') state.admin.tab='kiosks';
+    renderAdmin();
+    // Global shows live per-kiosk totals/category/payment mix, same as Orders/Reports above --
+    // needs the same refresh-on-entry treatment, since otherwise it only ever shows whatever
+    // was already cached from the last time Orders/Reports/a sale happened to fetch.
+    if(state.admin.tab==='global') refreshDailyTotals(true);
+  }
   if(name==='payment') renderPayment();
   renderChargeBar();
   document.getElementById('confirmPayBtn').classList.toggle('hidden', name!=='payment');
@@ -1667,7 +1671,11 @@ function renderSaleDetail(){
 }
 
 /* ================= ADMIN ================= */
-function setAdminTab(tab){ state.admin.tab = tab; renderAdmin(); }
+function setAdminTab(tab){
+  state.admin.tab = tab;
+  renderAdmin();
+  if(tab==='global') refreshDailyTotals(true); // same reasoning as the goto('admin') case above
+}
 function renderAdmin(){
   document.querySelectorAll('#adminTabs span').forEach(s=>s.classList.toggle('active', s.dataset.tab===state.admin.tab));
   let html = '';
@@ -1793,8 +1801,11 @@ function loadDesign(){
     const d = getDesignStore();
     if(d.itemStyle === 'fill' || d.itemStyle === 'border'){
       state.itemStyle = d.itemStyle;
-      document.getElementById('app').classList.toggle('style-fill', d.itemStyle === 'fill');
     }
+    // Applied unconditionally (not just inside the branch above) so a device with no saved
+    // choice yet still gets the CSS class matching state.itemStyle's default, rather than
+    // silently staying on the OLD default look until someone opens Admin > Design once.
+    document.getElementById('app').classList.toggle('style-fill', state.itemStyle === 'fill');
     if(d.vars){
       Object.keys(d.vars).forEach(k => document.documentElement.style.setProperty(k, d.vars[k]));
     }
