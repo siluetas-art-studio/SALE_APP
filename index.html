@@ -1,7 +1,7 @@
 <title>Siluetas POS</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="app-build" content="1788529297489">
+<meta name="app-build" content="1788531558064">
 <script>
 (function(){
   try{
@@ -1403,10 +1403,10 @@ function confirmPayment(){
   // requestId: a per-sale-attempt fingerprint, unique even if this exact fetch gets silently
   // resent by the phone's network layer (observed on iPhone/Safari after a wifi/signal blip --
   // the sheet ends up with two rows for the same sale, a minute apart, each with its own row
-  // number). The Apps Script side needs a small change to actually use this for de-duplication
-  // (skip inserting a row if it already logged this requestId in the last few minutes) -- until
-  // that's added there, this id is sent but not yet acted on server-side.
-  const requestId = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  // number). Kept short (6 chars) since it's printed as a human-facing ticket ID in the sheet --
+  // the Apps Script side only needs it to stay unique for its ~10-minute de-dup window, so 6
+  // base-36 characters is plenty (36^6 combinations) without being long to read or write down.
+  const requestId = Math.random().toString(36).slice(2, 8).toUpperCase();
   logSaleToSheet({kiosk: state.currentKiosk, staff: state.staffName, items: itemsStr, category: categories, method: selectedMethod, total: total, requestId: requestId});
   // Reflect locally right away so Orders/Reports feel instant; refreshDailyTotals(true) below
   // reconciles against the sheet's authoritative totals shortly after.
